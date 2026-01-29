@@ -1,0 +1,101 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom font - Galano 900 for headings */
+@font-face {
+  font-family: 'Galano';
+  src: url('/fonts/Galano_900.woff2') format('woff2');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  * {
+    @apply m-0 p-0 box-border;
+  }
+
+  html {
+    scroll-behavior: auto; /* Disable native smooth scroll for Lenis */
+  }
+
+  body {
+    font-family: 'Lato', sans-serif;
+    @apply overflow-x-hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Galano', sans-serif;
+    font-weight: 900;
+  }
+}
+
+@layer components {
+  .hero-section {
+    background: linear-gradient(235deg, #982B7B 0%, #2E3373 119.43%);
+    position: relative; /* Needed for absolute positioning of model-section */
+  }
+  
+  /* Ensure subsequent sections appear above frozen hero section */
+  section:not(.hero-section) {
+    position: relative;
+    z-index: 10;
+    /* Background colors are set via Tailwind classes (bg-slate-900, bg-slate-200, etc.) */
+  }
+
+  .container {
+    @apply flex relative;
+  }
+
+  .text-section {
+    @apply flex-1 py-5 px-14 flex flex-col justify-start z-[2] max-w-[50%] relative;
+  }
+
+  .model-section {
+    @apply fixed top-0 left-0 w-full h-[100vh] z-0;
+    /* pointer-events: none; */
+     /* Allow text to be clickable */
+  }
+
+  #canvas-container {
+    @apply w-full h-full;
+  }
+
+  #logo-scroll-container {
+    will-change: transform;
+    /* No CSS transition - JavaScript handles smooth scrolling via Lenis */
+  }
+
+  .logo-set {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+@layer utilities {
+
+  .font-galano {
+    font-family: 'Galano', sans-serif;
+    font-weight: 900;
+  }
+
+  .hanging-indent {
+    text-indent: -28px; /* Moves the first line back to the left */
+  }  
+
+  @media (max-width: 768px) {
+    .container {
+      @apply flex-col;
+    }
+
+    .text-section {
+      @apply max-w-full py-10 px-8;
+    }
+
+    .model-section {
+      @apply absolute w-full h-full;
+    }
+  }
+}
