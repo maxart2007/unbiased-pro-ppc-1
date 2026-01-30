@@ -9,6 +9,19 @@ import './style.css';
 gsap.registerPlugin(ScrollTrigger);
 
 // ============================================================================
+// SCROLL RESTORATION PREVENTION
+// Prevents browser from restoring scroll position on reload, which causes
+// ScrollTrigger initialization issues (gaps, visual glitches)
+// ============================================================================
+
+if ('scrollRestoration' in history) {
+    history.scrollRestoration = 'manual';
+}
+
+// Force scroll to top immediately on page load
+window.scrollTo(0, 0);
+
+// ============================================================================
 // THREE.JS SETUP
 // ============================================================================
 
@@ -56,7 +69,7 @@ textureFiles.forEach((filename) => {
             loadedTexture.flipY = false;
             loadedTexture.colorSpace = THREE.SRGBColorSpace;
             texturesLoaded++;
-            
+
             if (model && texturesLoaded === 1) {
                 applyTextureToMaterials(model, filename);
                 currentTextureName = filename;
@@ -72,7 +85,7 @@ function applyTextureToMaterials(object, textureName) {
     if (!textures[textureName]) return;
     const targetTexture = textures[textureName];
     if (!targetTexture.image) return;
-    
+
     object.traverse((child) => {
         if (child.isMesh && child.material) {
             const materials = Array.isArray(child.material) ? child.material : [child.material];
@@ -80,14 +93,14 @@ function applyTextureToMaterials(object, textureName) {
                 if (material) {
                     const materialName = (material.name || '').toLowerCase();
                     const isDisplayGlass = materialName === 'display glass' || material.type === 'MeshBasicMaterial';
-                    
+
                     if (isDisplayGlass) {
                         const flippedTexture = targetTexture.clone();
                         flippedTexture.wrapS = THREE.RepeatWrapping;
                         flippedTexture.wrapT = THREE.RepeatWrapping;
                         flippedTexture.repeat.set(1, -1);
                         flippedTexture.needsUpdate = true;
-                        
+
                         if (material.type === 'MeshBasicMaterial') {
                             material.map = flippedTexture;
                             material.needsUpdate = true;
@@ -98,7 +111,7 @@ function applyTextureToMaterials(object, textureName) {
                                 transparent: false,
                                 opacity: 1.0
                             });
-                            
+
                             if (Array.isArray(child.material)) {
                                 child.material[materialIndex] = basicMaterial;
                             } else {
@@ -151,9 +164,6 @@ loader.load(
         object.position.z = -center.z * scale;
 
         modelGroup.add(object);
-        
-        // Initialize camera animations after model loads
-        initCameraAnimations();
     },
     (progress) => console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%'),
     (error) => console.error('Error loading FBX:', error)
@@ -171,6 +181,9 @@ const lenis = new Lenis({
     touchMultiplier: 2,
 });
 
+// Reset Lenis scroll position to top immediately
+lenis.scrollTo(0, { immediate: true });
+
 // Connect Lenis to GSAP ScrollTrigger
 lenis.on('scroll', ScrollTrigger.update);
 
@@ -181,7 +194,7 @@ gsap.ticker.add((time) => {
 gsap.ticker.lagSmoothing(0);
 
 // ============================================================================
-// CAMERA ANIMATION STATE (controlled by GSAP)
+// CAMERA STATE (controlled by GSAP)
 // ============================================================================
 
 const cameraState = {
@@ -198,7 +211,7 @@ function updateCameraFromState() {
     camera.position.z = Math.sin(cameraState.rotation) * cameraState.zoom;
     camera.position.y = cameraState.elevation;
     camera.lookAt(cameraState.lookAtX, cameraState.lookAtY, 0);
-    
+
     // Handle texture changes
     if (model && cameraState.texture !== currentTextureName) {
         currentTextureName = cameraState.texture;
@@ -207,238 +220,408 @@ function updateCameraFromState() {
 }
 
 // ============================================================================
-// GSAP SCROLL ANIMATIONS
+// CAMERA KEYFRAME DEFINITIONS
+// Each keyframe is tied to a specific message container
 // ============================================================================
 
-function initCameraAnimations() {
-    const heroSection = document.querySelector('.hero-section');
-    if (!heroSection) return;
-
-    // Main camera timeline - tied to hero section scroll
-    const cameraTl = gsap.timeline({
-        scrollTrigger: {
-            trigger: heroSection,
-            start: 'top top',
-            end: 'bottom bottom',
-            scrub: 1, // Smooth scrubbing
-            onUpdate: updateCameraFromState
-        }
-    });
-
-    // Camera keyframes - direct value animation, much more predictable!
-    // Keyframe 1: Initial view (0% - 15%)
-    cameraTl.to(cameraState, {
+const CAMERA_KEYFRAMES = {
+    initial: {
+        rotation: Math.PI / 2,
+        zoom: 5,
+        elevation: 4,
+        lookAtX: 0,
+        lookAtY: 3,
+        texture: 'texture-1.png'
+    },
+    message1: {
         rotation: Math.PI / 2 - 0.4,
         zoom: 10,
         elevation: 2,
         lookAtX: -1,
         lookAtY: 0.3,
-        duration: 15,
-        ease: 'none'
-    });
-
-    // Keyframe 2: Hold (15% - 25%)
-    cameraTl.to(cameraState, {
-        duration: 10,
-        ease: 'none'
-    });
-
-    // Keyframe 3: Rotate to right side (25% - 40%)
-    cameraTl.to(cameraState, {
+        texture: 'texture-1.png'
+    },
+    message2: {
         rotation: Math.PI - 1,
+        zoom: 10,
+        elevation: 2,
         lookAtX: 1,
-        texture: 'texture-2.png',
-        duration: 15,
-        ease: 'none'
-    });
-
-    // Keyframe 4: Hold (40% - 50%)
-    cameraTl.to(cameraState, {
-        duration: 10,
-        ease: 'none'
-    });
-
-    // Keyframe 5: Rotate back to left (50% - 55%)
-    cameraTl.to(cameraState, {
+        lookAtY: 0.3,
+        texture: 'texture-2.png'
+    },
+    message3: {
         rotation: Math.PI / 2 - 0.4,
+        zoom: 10,
+        elevation: 2,
         lookAtX: -1,
-        texture: 'texture-3.png',
-        duration: 5,
-        ease: 'none'
-    });
-
-    // Keyframe 6: Hold (55% - 65%)
-    cameraTl.to(cameraState, {
-        duration: 10,
-        ease: 'none'
-    });
-
-    // Keyframe 7: Final position (65% - 80%)
-    cameraTl.to(cameraState, {
+        lookAtY: 0.3,
+        texture: 'texture-3.png'
+    },
+    message4: {
         rotation: 1.256,
         zoom: 12,
         elevation: 2.5,
         lookAtX: -2.2,
         lookAtY: 0.66,
-        texture: 'texture-4.png',
-        duration: 15,
+        texture: 'texture-4.png'
+    }
+};
+
+// ============================================================================
+// GSAP SCROLL ANIMATIONS
+// Single timeline for camera with explicit durations for smooth bidirectional scrubbing
+// ============================================================================
+
+// Texture thresholds - texture changes at these scroll progress points
+const TEXTURE_THRESHOLDS = [
+    { progress: 0, texture: 'texture-1.png' },
+    { progress: 0.27, texture: 'texture-2.png' },
+    { progress: 0.52, texture: 'texture-3.png' },
+    { progress: 0.75, texture: 'texture-4.png' }
+];
+
+let lastTextureIndex = 0;
+
+function updateTextureFromProgress(progress) {
+    // Find which texture should be active based on progress
+    let textureIndex = 0;
+    for (let i = TEXTURE_THRESHOLDS.length - 1; i >= 0; i--) {
+        if (progress >= TEXTURE_THRESHOLDS[i].progress) {
+            textureIndex = i;
+            break;
+        }
+    }
+
+    // Only update if texture changed
+    if (textureIndex !== lastTextureIndex) {
+        cameraState.texture = TEXTURE_THRESHOLDS[textureIndex].texture;
+        lastTextureIndex = textureIndex;
+    }
+}
+
+function initCameraAnimations() {
+    const heroSection = document.querySelector('.hero-section');
+    if (!heroSection) return;
+
+    // Set initial camera state explicitly
+    Object.assign(cameraState, CAMERA_KEYFRAMES.initial);
+
+    // Single timeline with total duration of 1 (representing 0-100% scroll)
+    const cameraTl = gsap.timeline({
+        scrollTrigger: {
+            trigger: heroSection,
+            start: 'top top',
+            end: 'bottom bottom',
+            scrub: 0.5, // Faster scrub response for smoother feel
+            onUpdate: (self) => {
+                updateTextureFromProgress(self.progress);
+                updateCameraFromState();
+            }
+        }
+    });
+
+    // Timeline positions (as fraction of total timeline)
+    // 0.00 → 0.15: Initial → Message 1
+    // 0.15 → 0.40: Message 1 → Message 2  
+    // 0.40 → 0.65: Message 2 → Message 3
+    // 0.65 → 0.85: Message 3 → Message 4
+    // 0.85 → 1.00: Hold at Message 4
+
+    // Initial → Message 1 (duration: 0.15)
+    cameraTl.to(cameraState, {
+        duration: 0.15,
+        rotation: CAMERA_KEYFRAMES.message1.rotation,
+        zoom: CAMERA_KEYFRAMES.message1.zoom,
+        elevation: CAMERA_KEYFRAMES.message1.elevation,
+        lookAtX: CAMERA_KEYFRAMES.message1.lookAtX,
+        lookAtY: CAMERA_KEYFRAMES.message1.lookAtY,
         ease: 'none'
     });
 
-    // Keyframe 8: Hold at end (80% - 100%)
+    // Message 1 → Message 2 (duration: 0.25, from 0.15 to 0.40)
     cameraTl.to(cameraState, {
-        duration: 20,
+        duration: 0.25,
+        rotation: CAMERA_KEYFRAMES.message2.rotation,
+        zoom: CAMERA_KEYFRAMES.message2.zoom,
+        elevation: CAMERA_KEYFRAMES.message2.elevation,
+        lookAtX: CAMERA_KEYFRAMES.message2.lookAtX,
+        lookAtY: CAMERA_KEYFRAMES.message2.lookAtY,
         ease: 'none'
     });
+
+    // Message 2 → Message 3 (duration: 0.25, from 0.40 to 0.65)
+    cameraTl.to(cameraState, {
+        duration: 0.25,
+        rotation: CAMERA_KEYFRAMES.message3.rotation,
+        zoom: CAMERA_KEYFRAMES.message3.zoom,
+        elevation: CAMERA_KEYFRAMES.message3.elevation,
+        lookAtX: CAMERA_KEYFRAMES.message3.lookAtX,
+        lookAtY: CAMERA_KEYFRAMES.message3.lookAtY,
+        ease: 'none'
+    });
+
+    // Message 3 → Message 4 (duration: 0.20, from 0.65 to 0.85)
+    cameraTl.to(cameraState, {
+        duration: 0.20,
+        rotation: CAMERA_KEYFRAMES.message4.rotation,
+        zoom: CAMERA_KEYFRAMES.message4.zoom,
+        elevation: CAMERA_KEYFRAMES.message4.elevation,
+        lookAtX: CAMERA_KEYFRAMES.message4.lookAtX,
+        lookAtY: CAMERA_KEYFRAMES.message4.lookAtY,
+        ease: 'none'
+    });
+
+    // Hold at Message 4 (duration: 0.15, from 0.85 to 1.00)
+    // Empty tween to fill the timeline
+    cameraTl.to({}, { duration: 0.15 });
 }
 
 function initMessageAnimations() {
-    // Header animation - fades out as you scroll
-    const header = document.querySelector('#hero-header');
-    if (header) {
-        gsap.to(header, {
-            y: 100,
-            opacity: 0,
+    // Header - fades out when you start scrolling
+    gsap.to('#hero-header', {
+        y: -100,
+        opacity: 0,
+        ease: 'none',
+        scrollTrigger: {
+            trigger: '.hero-section',
+            start: 'top top',        // When hero section top hits viewport top
+            end: '10% top',          // When 10% of hero section passes viewport top
+            scrub: true
+        }
+    });
+
+    // Hero content - fades out quickly
+    gsap.to('#hero-content > div', {
+        y: 100,
+        opacity: 0,
+        ease: 'none',
+        scrollTrigger: {
+            trigger: '.hero-section',
+            start: 'top top',
+            end: '5% top',
+            scrub: true
+        }
+    });
+
+    // Message 1 - Fade in
+    gsap.fromTo('#message-1 .hero-message',
+        { y: 100, opacity: 0 },
+        {
+            y: 0,
+            opacity: 1,
+            ease: 'none',
             scrollTrigger: {
-                trigger: '.hero-section',
-                start: 'top top',
-                end: '15% top',
-                scrub: 1
+                trigger: '#message-1',
+                start: 'top 80%',    // Start when container top is 80% down viewport
+                end: 'top 40%',      // End when container top is 40% down viewport
+                scrub: true
             }
-        });
-    }
+        }
+    );
 
-    // Hero content animation - fades out quickly
-    const heroContent = document.querySelector('#hero-content > div');
-    if (heroContent) {
-        gsap.to(heroContent, {
-            y: -150,
-            opacity: 0,
+    // Message 1 - Fade out
+    gsap.to('#message-1 .hero-message', {
+        y: -50,
+        opacity: 0,
+        ease: 'none',
+        scrollTrigger: {
+            trigger: '#message-1',
+            start: 'bottom 60%',     // Start when container bottom is 60% down viewport
+            end: 'bottom 20%',       // End when container bottom is 20% down viewport
+            scrub: true
+        }
+    });
+
+    // Message 2 - Fade in
+    gsap.fromTo('#message-2 .hero-message',
+        { y: 100, opacity: 0 },
+        {
+            y: 0,
+            opacity: 1,
+            ease: 'none',
             scrollTrigger: {
-                trigger: '.hero-section',
-                start: 'top top',
-                end: '20% top',
-                scrub: 1
+                trigger: '#message-2',
+                start: 'top 80%',
+                end: 'top 40%',
+                scrub: true
             }
-        });
-    }
+        }
+    );
 
-    // All hero messages - animate in and out based on their container
-    const messages = document.querySelectorAll('.hero-message');
-    messages.forEach((message, index) => {
-        const container = message.closest('.container');
-        if (!container) return;
+    // Message 2 - Fade out
+    gsap.to('#message-2 .hero-message', {
+        y: -50,
+        opacity: 0,
+        ease: 'none',
+        scrollTrigger: {
+            trigger: '#message-2',
+            start: 'bottom 60%',
+            end: 'bottom 20%',
+            scrub: true
+        }
+    });
 
-        // Fade in animation
-        gsap.fromTo(message, 
-            { y: 100, opacity: 0 },
-            {
-                y: 0,
-                opacity: 1,
-                scrollTrigger: {
-                    trigger: container,
-                    start: 'top 80%',
-                    end: 'top 30%',
-                    scrub: 1
-                }
+    // Message 3 - Fade in
+    gsap.fromTo('#message-3 .hero-message',
+        { y: 100, opacity: 0 },
+        {
+            y: 0,
+            opacity: 1,
+            ease: 'none',
+            scrollTrigger: {
+                trigger: '#message-3',
+                start: 'top 80%',
+                end: 'top 40%',
+                scrub: true
             }
-        );
-        
-        // Fade out animation (except for the last message)
-        if (index < messages.length - 1) {
-            gsap.to(message, {
-                y: -50,
-                opacity: 0,
-                scrollTrigger: {
-                    trigger: container,
-                    start: 'bottom 70%',
-                    end: 'bottom 20%',
-                    scrub: 1
-                }
-            });
+        }
+    );
+
+    // Message 3 - Fade out
+    gsap.to('#message-3 .hero-message', {
+        y: -50,
+        opacity: 0,
+        ease: 'none',
+        scrollTrigger: {
+            trigger: '#message-3',
+            start: 'bottom 60%',
+            end: 'bottom 20%',
+            scrub: true
+        }
+    });
+
+    // Message 4 - Fade in (no fade out, it's the last one)
+    gsap.fromTo('#message-4 .hero-message',
+        { y: 100, opacity: 0 },
+        {
+            y: 0,
+            opacity: 1,
+            ease: 'none',
+            scrollTrigger: {
+                trigger: '#message-4',
+                start: 'top 80%',
+                end: 'top 40%',
+                scrub: true
+            }
+        }
+    );
+}
+
+function initHeroFreezing() {
+    // Use GSAP's native pin feature instead of manual CSS manipulation
+    ScrollTrigger.create({
+        trigger: '.hero-section',
+        start: 'bottom bottom',
+        endTrigger: '#aum-section',
+        end: 'top top',
+        pin: true,
+        pinSpacing: false
+    });
+
+    // Fade out the 3D model only when AUM section covers the viewport
+    // The model is position:fixed, so it stays in place - we fade it as next section comes in
+    gsap.to('.model-section', {
+        // opacity: 0,
+        ease: 'none',
+        scrollTrigger: {
+            trigger: '#aum-section',
+            start: 'top bottom',         // When AUM section enters viewport
+            end: 'top 70%',              // Quickly fade out
+            scrub: true
         }
     });
 }
 
 function initScaleAnimations() {
-    // Scale animation for sections with data-scale-keyframes
-    const scaleElements = document.querySelectorAll('[data-scale-keyframes]');
-    
-    scaleElements.forEach(element => {
-        const keyframesAttr = element.getAttribute('data-scale-keyframes');
-        try {
-            const cleaned = keyframesAttr.replace(/(\w+):/g, '"$1":');
-            const keyframes = JSON.parse(cleaned);
-            const keys = Object.keys(keyframes).map(Number).sort((a, b) => a - b);
-            
-            if (keys.length >= 2) {
-                const startScale = keyframes[keys[0]];
-                const endScale = keyframes[keys[keys.length - 1]];
-                
-                gsap.fromTo(element,
-                    { scale: startScale },
-                    {
-                        scale: endScale,
-                        ease: 'none',
-                        scrollTrigger: {
-                            trigger: element,
-                            start: 'top bottom',
-                            end: 'bottom top',
-                            scrub: 1
-                        }
-                    }
-                );
+    // AUM section - scales down as it enters viewport
+    gsap.fromTo('#aum-content',
+        { scale: 1.4 },
+        {
+            scale: 1,
+            ease: 'none',
+            scrollTrigger: {
+                trigger: '#aum-section',
+                start: 'top bottom',     // When section top hits viewport bottom
+                end: 'top 20%',          // When section top is 20% down viewport
+                scrub: true
             }
-        } catch (e) {
-            console.error('Error parsing scale keyframes:', e);
         }
-    });
-}
+    );
 
-function initHeroFreezing() {
-    const heroSection = document.querySelector('.hero-section');
-    const spacer = document.getElementById('hero-section-spacer');
-    
-    if (!heroSection || !spacer) return;
-
-    ScrollTrigger.create({
-        trigger: heroSection,
-        start: 'bottom bottom',
-        end: 'bottom top',
-        onEnter: () => {
-            heroSection.style.position = 'fixed';
-            heroSection.style.bottom = '0';
-            heroSection.style.top = 'auto';
-            heroSection.style.left = '0';
-            heroSection.style.width = '100%';
-            heroSection.style.zIndex = '1';
-            spacer.style.display = 'block';
-            spacer.style.height = `${heroSection.offsetHeight}px`;
+    gsap.fromTo('#aum-text',
+        {
+            y: 300
         },
-        onLeaveBack: () => {
-            heroSection.style.position = '';
-            heroSection.style.bottom = '';
-            heroSection.style.top = '';
-            heroSection.style.left = '';
-            heroSection.style.width = '';
-            heroSection.style.zIndex = '';
-            spacer.style.display = 'none';
+        {
+            y: 0,
+            ease: 'none',
+            scrollTrigger: {
+                trigger: '#aum-section',
+                start: 'top bottom',     // When section top hits viewport bottom
+                end: 'top 20%',          // When section top is 20% down viewport
+                scrub: true
+            }
         }
-    });
+    );
+
+    gsap.fromTo('#aum-video',
+        {
+            x: "-25%"
+        },
+        {
+            x: 0,
+            ease: 'none',
+            scrollTrigger: {
+                trigger: '#aum-section',
+                start: 'top bottom',     // When section top hits viewport bottom
+                end: 'top 20%',          // When section top is 20% down viewport
+                scrub: true
+            }
+        }
+    );
+
+    gsap.fromTo('#aum-text',
+        {
+            y: 0
+        },
+        {
+            y: 300,
+            ease: 'none',
+            scrollTrigger: {
+                trigger: '#aum-section',
+                start: 'top top',     // When section top hits viewport bottom
+                end: 'bottom top',          // When section top is 20% down viewport
+                scrub: true
+            }
+        }
+    );
+
+    gsap.fromTo('#aum-video',
+        {
+            y: 0
+        },
+        {
+            y: 300,
+            ease: 'none',
+            scrollTrigger: {
+                trigger: '#aum-section',
+                start: 'top top',     // When section top hits viewport bottom
+                end: 'bottom top',          // When section top is 20% down viewport
+                scrub: true
+            }
+        }
+    );
 }
 
 function initLogoScroll() {
-    const logoContainer = document.getElementById('logo-scroll-container');
-    if (!logoContainer) return;
-
-    gsap.to(logoContainer, {
+    gsap.to('#logo-scroll-container', {
         x: -500,
         ease: 'none',
         scrollTrigger: {
-            trigger: logoContainer,
+            trigger: '#logo-scroll-container',
             start: 'top bottom',
             end: 'bottom top',
-            scrub: 1
+            scrub: true
         }
     });
 }
@@ -446,12 +629,12 @@ function initLogoScroll() {
 function initStickyImageSection() {
     const stickyImage = document.getElementById('sticky-section-image');
     const messageTriggers = document.querySelectorAll('.message-trigger');
-    
+
     if (!stickyImage || messageTriggers.length === 0) return;
-    
+
     messageTriggers.forEach((trigger) => {
         const imageSrc = trigger.getAttribute('data-image');
-        
+
         ScrollTrigger.create({
             trigger: trigger,
             start: 'top center',
@@ -469,16 +652,16 @@ function initStickyImageSection() {
 function initQuoteAnimation() {
     const quoteElement = document.getElementById('quote');
     if (!quoteElement) return;
-    
+
     // Check if already initialized
     if (quoteElement.querySelector('.quote-word')) return;
-    
+
     const text = quoteElement.textContent;
     const parts = text.split(/(\s+)/);
-    
+
     quoteElement.innerHTML = '';
     const wordSpans = [];
-    
+
     parts.forEach(part => {
         if (part.trim().length === 0) {
             quoteElement.appendChild(document.createTextNode(part));
@@ -497,13 +680,13 @@ function initQuoteAnimation() {
     const parentSection = quoteElement.closest('section');
     if (parentSection && wordSpans.length > 0) {
         wordSpans.forEach((span, index) => {
-            const startPercent = (index / wordSpans.length) * 80; // Spread across 80% of scroll
-            const endPercent = startPercent + 5; // Each word takes 5% to transition
-            
+            // Each word triggers at a specific scroll position
+            const progress = index / wordSpans.length;
+            const startPercent = progress * 60 + 30; // Spread from 10% to 70%
+
             ScrollTrigger.create({
                 trigger: parentSection,
                 start: `top+=${startPercent}% bottom`,
-                end: `top+=${endPercent}% bottom`,
                 onEnter: () => {
                     span.style.color = 'rgb(15, 23, 42)'; // Black (slate-900)
                 },
@@ -520,38 +703,58 @@ function initQuoteAnimation() {
 // ============================================================================
 
 function init() {
-    initMessageAnimations();
-    initScaleAnimations();
-    initHeroFreezing();
-    initLogoScroll();
-    initStickyImageSection();
-    initQuoteAnimation();
+    // Clear any cached scroll calculations from previous sessions
+    ScrollTrigger.clearScrollMemory();
+    
+    // Reset scroll position again to ensure clean state
+    window.scrollTo(0, 0);
+    lenis.scrollTo(0, { immediate: true });
+    
+    // Small delay to ensure DOM has fully reflowed after scroll reset
+    requestAnimationFrame(() => {
+        initCameraAnimations();
+        initMessageAnimations();
+        initScaleAnimations();
+        initHeroFreezing();
+        initLogoScroll();
+        initStickyImageSection();
+        initQuoteAnimation();
+        
+        // Force ScrollTrigger to recalculate after all animations are set up
+        ScrollTrigger.refresh(true);
+    });
 }
 
-// Initialize after DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-} else {
-    init();
-}
+// Wait for full page load (images, fonts, etc.) before initializing ScrollTrigger
+// This ensures accurate measurements for pinning and scroll calculations
+window.addEventListener('load', () => {
+    // Additional small delay to ensure everything is painted
+    setTimeout(init, 100);
+});
 
 // ============================================================================
 // RESIZE HANDLING
 // ============================================================================
 
+let resizeTimeout;
+
 function onWindowResize() {
-    width = container.clientWidth || window.innerWidth;
-    height = container.clientHeight || window.innerHeight;
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
-    renderer.setSize(width, height);
+    // Debounce resize to prevent rapid recalculations
+    clearTimeout(resizeTimeout);
     
-    // Refresh ScrollTrigger calculations
-    ScrollTrigger.refresh();
+    resizeTimeout = setTimeout(() => {
+        width = container.clientWidth || window.innerWidth;
+        height = container.clientHeight || window.innerHeight;
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        renderer.setSize(width, height);
+
+        // Force complete ScrollTrigger recalculation
+        ScrollTrigger.refresh(true);
+    }, 150);
 }
 
 window.addEventListener('resize', onWindowResize);
-onWindowResize();
 
 // ============================================================================
 // ANIMATION LOOP
