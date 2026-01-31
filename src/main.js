@@ -29,8 +29,10 @@ const scene = new THREE.Scene();
 scene.background = null;
 
 const container = document.getElementById('canvas-container');
-let width = container.clientWidth || window.innerWidth;
-let height = container.clientHeight || window.innerHeight;
+// Use viewport dimensions directly for fixed-position elements
+// container.clientWidth can return incorrect values when ScrollTrigger manipulates DOM
+let width = window.innerWidth;
+let height = window.innerHeight;
 
 const camera = new THREE.PerspectiveCamera(30, width / height, 0.1, 400);
 camera.position.set(0, 0, 0);
@@ -743,8 +745,10 @@ function onWindowResize() {
     clearTimeout(resizeTimeout);
     
     resizeTimeout = setTimeout(() => {
-        width = container.clientWidth || window.innerWidth;
-        height = container.clientHeight || window.innerHeight;
+        // Use viewport dimensions directly - container dimensions can be
+        // corrupted by ScrollTrigger pin calculations
+        width = window.innerWidth;
+        height = window.innerHeight;
         camera.aspect = width / height;
         camera.updateProjectionMatrix();
         renderer.setSize(width, height);

@@ -53,13 +53,24 @@
   }
 
   .model-section {
-    @apply fixed top-0 left-0 w-full h-[100vh] z-0;
-    /* pointer-events: none; */
-     /* Allow text to be clickable */
+    @apply fixed top-0 left-0;
+    width: 100vw !important;  /* Use viewport units, not percentages */
+    height: 100vh !important;
+    max-width: 100vw !important; /* Prevent any overflow */
+    z-index: 5; /* Above hero background, below subsequent sections */
+    pointer-events: none; /* Allow clicking through to content */
+    overflow: hidden; /* Clip any overflow */
   }
 
   #canvas-container {
     @apply w-full h-full;
+    max-width: 100vw !important;
+    overflow: hidden;
+  }
+  
+  #canvas-container canvas {
+    max-width: 100vw !important;
+    max-height: 100vh !important;
   }
 
   #logo-scroll-container {
@@ -92,10 +103,6 @@
 
     .text-section {
       @apply max-w-full py-10 px-8;
-    }
-
-    .model-section {
-      @apply absolute w-full h-full;
     }
   }
 }

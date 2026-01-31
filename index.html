@@ -25,10 +25,10 @@
         </div>
         
         <!-- Hero Content -->
-        <div class="container mx-auto min-h-[60vh]" id="hero-content">
+        <div class="xl:container mx-auto min-h-[60vh] px-6 lg:px-8" id="hero-content">
             <div class="w-100 pt-0 pb-12">
-                <div class="flex flex-row gap-12">
-                    <h1 class="w-1/2 text-4xl md:text-6xl font-black text-white leading-tight drop-shadow-[2px_2px_4px_rgba(0,0,0,0.3)] pt-12">
+                <div class="flex flex-col sm:flex-row gap-12">
+                    <h1 class="w-full sm:w-1/2 text-4xl md:text-6xl font-black text-white leading-tight drop-shadow-[2px_2px_4px_rgba(0,0,0,0.3)] pt-12">
                         Connecting Financial Advisors with the clients they want</h1>
                     <div class="w-1/3 flex flex-col pt-14">
                         <p class="text-xl text-white/90 leading-relaxed mb-6">
@@ -115,8 +115,8 @@
         </div>
         
         <!-- Final CTA -->
-        <div class="container mx-auto py-32" id="message-4">
-            <div class="w-1/2 hero-message">
+        <div class="container mx-auto py-32 min-h-[100vh]" id="message-4">
+            <div class="w-1/2 hero-message flex flex-col justify-center">
                 <div class="flex flex-col gap-4">
                     <p class="text-5xl font-black font-galano text-white">Connecting you with exclusive leads now</p>
                     <p class="text-xl text-white pr-12 leading-relaxed">Unbiased connects financial advisory firms
@@ -126,19 +126,20 @@
                 </div>
             </div>
         </div>
-        
-        <div class="model-section">
-            <div id="canvas-container"></div>
-        </div>
     </section>
+    
+    <!-- 3D Model - Outside hero section so it's not affected by pinning -->
+    <div class="model-section">
+        <div id="canvas-container"></div>
+    </div>
     
     <!-- Spacer to maintain scroll position when hero section is frozen -->
     <div id="hero-section-spacer" style="display: none;"></div>
     
-    <section class="bg-slate-900 h-[100vh]">
-        <div class="w-full origin-top" data-scale-keyframes="{0:1.8,100:1}">
+    <section class="bg-slate-900 h-[100vh]" id="aum-section">
+        <div class="w-full origin-top" id="aum-content">
             <div class="container mx-auto py-32 flex-row gap-12">
-                <div class="flex flex-col gap-4 w-1/3">
+                <div class="flex flex-col gap-4 w-1/3" id="aum-text">
                     <h2 class="text-6xl font-bold text-white mb-2">Unlock more AUM</h2>
                     <p class="text-lg mx-auto text-white mb-4">Instantly match with people looking for
                         financial advice. You select your ideal client profile, we match you with them.</p>
@@ -148,7 +149,7 @@
                     </a>
                 </div>
                 <!-- video goes here -->
-                <video class="w-2/3 h-auto" controls>
+                <video class="w-2/3 h-auto" controls id="aum-video">
                     <source src="videos/aum.mp4" type="video/mp4" />
                 </video>
             </div>
@@ -169,7 +170,7 @@
                 </div>
             </div>
 
-            <div id="logo-scroll-container" class="flex flex-row gap-24 items-center opacity-30">
+            <div id="logo-scroll-container" class="flex flex-row gap-24 items-center opacity-30 overflow-hidden">
                 <!-- Logo sets repeated for continuous scroll -->
                 <div class="logo-set flex flex-row gap-24 items-center flex-shrink-0">
                     <img src="img/kiplinger.svg" alt="Kiplinger" class="h-7 object-contain">
