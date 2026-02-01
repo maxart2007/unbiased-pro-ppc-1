@@ -60,7 +60,7 @@ scene.add(directionalLight2);
 // Texture loading
 const textureLoader = new THREE.TextureLoader();
 const textures = {};
-const textureFiles = ['texture-1.png', 'texture-2.png', 'texture-3.png', 'texture-4.png'];
+const textureFiles = ['texture-1.jpg', 'texture-2.jpg', 'texture-3.jpg', 'texture-4.jpg', 'texture-5.jpg'];
 let texturesLoaded = 0;
 let currentTextureName = null;
 
@@ -205,7 +205,7 @@ const cameraState = {
     elevation: 4,
     lookAtX: 0,
     lookAtY: 3,
-    texture: 'texture-1.png'
+    texture: 'texture-1.jpg'
 };
 
 function updateCameraFromState() {
@@ -223,51 +223,253 @@ function updateCameraFromState() {
 
 // ============================================================================
 // CAMERA KEYFRAME DEFINITIONS
-// Each keyframe is tied to a specific message container
+// Breakpoint-based keyframes: keys are max-width in pixels
+// The helper function selects the smallest breakpoint >= current viewport width
 // ============================================================================
 
-const CAMERA_KEYFRAMES = {
-    initial: {
-        rotation: Math.PI / 2,
-        zoom: 5,
-        elevation: 4,
-        lookAtX: 0,
-        lookAtY: 3,
-        texture: 'texture-1.png'
+const CAMERA_KEYFRAMES_BY_BREAKPOINT = {
+    // Mobile: max-width 768px
+    // Push camera back (higher zoom values) to fit model in smaller viewport
+
+    768: {
+        initial: {
+            rotation: Math.PI / 2,
+            zoom: 15,
+            elevation: 4,
+            lookAtX: 0,
+            lookAtY: 3,
+            texture: 'texture-1.jpg'
+        },
+        message1: {
+            rotation: Math.PI / 2,
+            zoom: 14,
+            elevation: 6.5,
+            lookAtX: 0,
+            lookAtY: 3.5,
+            texture: 'texture-2.jpg'
+        },
+        message2: {
+            rotation: Math.PI / 2,
+            zoom: 13,
+            elevation: 7,
+            lookAtX: 0,
+            lookAtY: 2.5,
+            texture: 'texture-3.jpg'
+        },
+        message3: {
+            rotation: Math.PI / 2,
+            zoom: 12,
+            elevation: 4,
+            lookAtX: 0,
+            lookAtY: 2.5,
+            texture: 'texture-4.jpg'
+        },
+        message4: {
+            rotation: Math.PI / 2,
+            zoom: 11,
+            elevation: 4,
+            lookAtX: 0,
+            lookAtY: 3,
+            texture: 'texture-5.jpg'
+        }
     },
-    message1: {
-        rotation: Math.PI / 2 - 0.4,
-        zoom: 10,
-        elevation: 2,
-        lookAtX: -1,
-        lookAtY: 0.3,
-        texture: 'texture-1.png'
+
+    960: {
+        initial: {
+            rotation: Math.PI / 2,
+            zoom: 10,
+            elevation: 4,
+            lookAtX: 0,
+            lookAtY: 3,
+            texture: 'texture-1.png'
+        },
+        message1: {
+            rotation: Math.PI / 2,
+            zoom: 14,
+            elevation: 6.5,
+            lookAtX: 0,
+            lookAtY: 3.5,
+            texture: 'texture-2.png'
+        },
+        message2: {
+            rotation: Math.PI / 2,
+            zoom: 13,
+            elevation: 7,
+            lookAtX: 0,
+            lookAtY: 2.5,
+            texture: 'texture-3.png'
+        },
+        message3: {
+            rotation: Math.PI / 2,
+            zoom: 12,
+            elevation: 4,
+            lookAtX: 0,
+            lookAtY: 2.5,
+            texture: 'texture-4.png'
+        },
+        message4: {
+            rotation: Math.PI / 2,
+            zoom: 11,
+            elevation: 4,
+            lookAtX: 0,
+            lookAtY: 3,
+            texture: 'texture-5.png'
+        }
     },
-    message2: {
-        rotation: Math.PI - 1,
-        zoom: 10,
-        elevation: 2,
-        lookAtX: 1,
-        lookAtY: 0.3,
-        texture: 'texture-2.png'
+
+    1080: {
+        initial: {
+            rotation: Math.PI / 2,
+            zoom: 8,
+            elevation: 4,
+            lookAtX: 0,
+            lookAtY: 3,
+            texture: 'texture-1.png'
+        },
+        message1: {
+            rotation: Math.PI / 2 - 0.4,
+            zoom: 10,
+            elevation: 2.5,
+            lookAtX: -2,
+            lookAtY: 0.5,
+            texture: 'texture-2.png'
+        },
+        message2: {
+            rotation: Math.PI / 2 + 0.4,
+            zoom: 9,
+            elevation: 2.5,
+            lookAtX: 2,
+            lookAtY: 0.5,
+            texture: 'texture-3.png'
+        },
+        message3: {
+            rotation: Math.PI / 2 - 0.4,
+            zoom: 9,
+            elevation: 2.5,
+            lookAtX: -2,
+            lookAtY: 0.5,
+            texture: 'texture-4.png'
+        },
+        message4: {
+            rotation: Math.PI / 2 - 0.4,
+            zoom: 12,
+            elevation: 2.5,
+            lookAtX: -3,
+            lookAtY: 0.5,
+            texture: 'texture-5.png'
+        }
     },
-    message3: {
-        rotation: Math.PI / 2 - 0.4,
-        zoom: 10,
-        elevation: 2,
-        lookAtX: -1,
-        lookAtY: 0.3,
-        texture: 'texture-3.png'
+
+    1280: {
+        initial: {
+            rotation: Math.PI / 2,
+            zoom: 7,
+            elevation: 4,
+            lookAtX: 0,
+            lookAtY: 3,
+            texture: 'texture-1.png'
+        },
+        message1: {
+            rotation: Math.PI / 2 - 0.4,
+            zoom: 9,
+            elevation: 2.5,
+            lookAtX: -2,
+            lookAtY: 0.5,
+            texture: 'texture-2.png'
+        },
+        message2: {
+            rotation: Math.PI / 2 + 0.4,
+            zoom: 9,
+            elevation: 2.5,
+            lookAtX: 2,
+            lookAtY: 0.5,
+            texture: 'texture-3.png'
+        },
+        message3: {
+            rotation: Math.PI / 2 - 0.4,
+            zoom: 9,
+            elevation: 2.5,
+            lookAtX: -2,
+            lookAtY: 0.5,
+            texture: 'texture-4.png'
+        },
+        message4: {
+            rotation: Math.PI / 2 - 0.4,
+            zoom: 12,
+            elevation: 2.5,
+            lookAtX: -3,
+            lookAtY: 0.5,
+            texture: 'texture-5.png'
+        }
     },
-    message4: {
-        rotation: 1.256,
-        zoom: 12,
-        elevation: 2.5,
-        lookAtX: -2.2,
-        lookAtY: 0.66,
-        texture: 'texture-4.png'
+
+    // Desktop: min-width 1280px (values optimized for 1280px+)
+    // Using 9999 as "infinity" breakpoint for desktop/default
+    9999: {
+        initial: {
+            rotation: Math.PI / 2,
+            zoom: 5,
+            elevation: 4,
+            lookAtX: 0,
+            lookAtY: 3,
+            texture: 'texture-1.png'
+        },
+        message1: {
+            rotation: Math.PI / 2 - 0.4,
+            zoom: 10,
+            elevation: 2,
+            lookAtX: -1,
+            lookAtY: 0.3,
+            texture: 'texture-2.png'
+        },
+        message2: {
+            rotation: Math.PI - 1,
+            zoom: 10,
+            elevation: 2,
+            lookAtX: 1,
+            lookAtY: 0.3,
+            texture: 'texture-3.png'
+        },
+        message3: {
+            rotation: Math.PI / 2 - 0.4,
+            zoom: 10,
+            elevation: 2,
+            lookAtX: -1,
+            lookAtY: 0.3,
+            texture: 'texture-4.png'
+        },
+        message4: {
+            rotation: 1.256,
+            zoom: 12,
+            elevation: 2.5,
+            lookAtX: -2.2,
+            lookAtY: 0.66,
+            texture: 'texture-5.png'
+        }
     }
 };
+
+/**
+ * Get the appropriate keyframes for the current viewport width.
+ * Finds the smallest breakpoint that is >= current width.
+ */
+function getKeyframesForViewport() {
+    const width = window.innerWidth;
+    const breakpoints = Object.keys(CAMERA_KEYFRAMES_BY_BREAKPOINT)
+        .map(Number)
+        .sort((a, b) => a - b);
+
+    for (const bp of breakpoints) {
+        if (width <= bp) {
+            return CAMERA_KEYFRAMES_BY_BREAKPOINT[bp];
+        }
+    }
+    // Fallback to largest breakpoint
+    return CAMERA_KEYFRAMES_BY_BREAKPOINT[breakpoints[breakpoints.length - 1]];
+}
+
+// Current active keyframes (updated on init and resize)
+let CAMERA_KEYFRAMES = getKeyframesForViewport();
 
 // ============================================================================
 // GSAP SCROLL ANIMATIONS
@@ -276,10 +478,10 @@ const CAMERA_KEYFRAMES = {
 
 // Texture thresholds - texture changes at these scroll progress points
 const TEXTURE_THRESHOLDS = [
-    { progress: 0, texture: 'texture-1.png' },
-    { progress: 0.27, texture: 'texture-2.png' },
-    { progress: 0.52, texture: 'texture-3.png' },
-    { progress: 0.75, texture: 'texture-4.png' }
+    { progress: 0, texture: 'texture-1.jpg' },
+    { progress: 0.1, texture: 'texture-2.jpg' },
+    { progress: 0.52, texture: 'texture-3.jpg' },
+    { progress: 0.75, texture: 'texture-4.jpg' }
 ];
 
 let lastTextureIndex = 0;
@@ -294,10 +496,16 @@ function updateTextureFromProgress(progress) {
         }
     }
 
-    // Only update if texture changed
-    if (textureIndex !== lastTextureIndex) {
-        cameraState.texture = TEXTURE_THRESHOLDS[textureIndex].texture;
+    // Always update texture state based on current progress (ensures bidirectional scrolling works)
+    const targetTexture = TEXTURE_THRESHOLDS[textureIndex].texture;
+    if (cameraState.texture !== targetTexture) {
+        cameraState.texture = targetTexture;
         lastTextureIndex = textureIndex;
+        // Immediately apply texture change
+        if (model) {
+            applyTextureToMaterials(model, targetTexture);
+            currentTextureName = targetTexture;
+        }
     }
 }
 
@@ -305,8 +513,18 @@ function initCameraAnimations() {
     const heroSection = document.querySelector('.hero-section');
     if (!heroSection) return;
 
+    // Get keyframes for current viewport width
+    CAMERA_KEYFRAMES = getKeyframesForViewport();
+
     // Set initial camera state explicitly
     Object.assign(cameraState, CAMERA_KEYFRAMES.initial);
+    
+    // Reset texture index tracking and apply initial texture
+    lastTextureIndex = 0;
+    if (model && cameraState.texture) {
+        applyTextureToMaterials(model, cameraState.texture);
+        currentTextureName = cameraState.texture;
+    }
 
     // Single timeline with total duration of 1 (representing 0-100% scroll)
     const cameraTl = gsap.timeline({
@@ -380,30 +598,36 @@ function initCameraAnimations() {
 
 function initMessageAnimations() {
     // Header - fades out when you start scrolling
-    gsap.to('#hero-header', {
-        y: -100,
-        opacity: 0,
-        ease: 'none',
-        scrollTrigger: {
-            trigger: '.hero-section',
-            start: 'top top',        // When hero section top hits viewport top
-            end: '10% top',          // When 10% of hero section passes viewport top
-            scrub: true
+    gsap.fromTo('#hero-header',
+        { y: 0, opacity: 1 },
+        {
+            y: -100,
+            opacity: 0,
+            ease: 'none',
+            scrollTrigger: {
+                trigger: '.hero-section',
+                start: 'top top',        // When hero section top hits viewport top
+                end: '10% top',          // When 10% of hero section passes viewport top
+                scrub: true
+            }
         }
-    });
+    );
 
     // Hero content - fades out quickly
-    gsap.to('#hero-content > div', {
-        y: 100,
-        opacity: 0,
-        ease: 'none',
-        scrollTrigger: {
-            trigger: '.hero-section',
-            start: 'top top',
-            end: '5% top',
-            scrub: true
+    gsap.fromTo('#hero-content > div',
+        { y: 0, opacity: 1 },
+        {
+            y: 100,
+            opacity: 0,
+            ease: 'none',
+            scrollTrigger: {
+                trigger: '.hero-section',
+                start: 'top top',
+                end: '5% top',
+                scrub: true
+            }
         }
-    });
+    );
 
     // Message 1 - Fade in
     gsap.fromTo('#message-1 .hero-message',
@@ -422,17 +646,20 @@ function initMessageAnimations() {
     );
 
     // Message 1 - Fade out
-    gsap.to('#message-1 .hero-message', {
-        y: -50,
-        opacity: 0,
-        ease: 'none',
-        scrollTrigger: {
-            trigger: '#message-1',
-            start: 'bottom 60%',     // Start when container bottom is 60% down viewport
-            end: 'bottom 20%',       // End when container bottom is 20% down viewport
-            scrub: true
+    gsap.fromTo('#message-1 .hero-message',
+        { y: 0, opacity: 1 },
+        {
+            y: -50,
+            opacity: 0,
+            ease: 'none',
+            scrollTrigger: {
+                trigger: '#message-1',
+                start: 'bottom 60%',     // Start when container bottom is 60% down viewport
+                end: 'bottom 20%',       // End when container bottom is 20% down viewport
+                scrub: true
+            }
         }
-    });
+    );
 
     // Message 2 - Fade in
     gsap.fromTo('#message-2 .hero-message',
@@ -451,17 +678,20 @@ function initMessageAnimations() {
     );
 
     // Message 2 - Fade out
-    gsap.to('#message-2 .hero-message', {
-        y: -50,
-        opacity: 0,
-        ease: 'none',
-        scrollTrigger: {
-            trigger: '#message-2',
-            start: 'bottom 60%',
-            end: 'bottom 20%',
-            scrub: true
+    gsap.fromTo('#message-2 .hero-message',
+        { y: 0, opacity: 1 },
+        {
+            y: -50,
+            opacity: 0,
+            ease: 'none',
+            scrollTrigger: {
+                trigger: '#message-2',
+                start: 'bottom 60%',
+                end: 'bottom 20%',
+                scrub: true
+            }
         }
-    });
+    );
 
     // Message 3 - Fade in
     gsap.fromTo('#message-3 .hero-message',
@@ -480,17 +710,20 @@ function initMessageAnimations() {
     );
 
     // Message 3 - Fade out
-    gsap.to('#message-3 .hero-message', {
-        y: -50,
-        opacity: 0,
-        ease: 'none',
-        scrollTrigger: {
-            trigger: '#message-3',
-            start: 'bottom 60%',
-            end: 'bottom 20%',
-            scrub: true
+    gsap.fromTo('#message-3 .hero-message',
+        { y: 0, opacity: 1 },
+        {
+            y: -50,
+            opacity: 0,
+            ease: 'none',
+            scrollTrigger: {
+                trigger: '#message-3',
+                start: 'bottom 60%',
+                end: 'bottom 20%',
+                scrub: true
+            }
         }
-    });
+    );
 
     // Message 4 - Fade in (no fade out, it's the last one)
     gsap.fromTo('#message-4 .hero-message',
@@ -536,23 +769,10 @@ function initHeroFreezing() {
 
 function initScaleAnimations() {
     // AUM section - scales down as it enters viewport
-    gsap.fromTo('#aum-content',
-        { scale: 1.4 },
-        {
-            scale: 1,
-            ease: 'none',
-            scrollTrigger: {
-                trigger: '#aum-section',
-                start: 'top bottom',     // When section top hits viewport bottom
-                end: 'top 20%',          // When section top is 20% down viewport
-                scrub: true
-            }
-        }
-    );
 
     gsap.fromTo('#aum-text',
         {
-            y: 300
+            y: -100
         },
         {
             y: 0,
@@ -560,7 +780,7 @@ function initScaleAnimations() {
             scrollTrigger: {
                 trigger: '#aum-section',
                 start: 'top bottom',     // When section top hits viewport bottom
-                end: 'top 20%',          // When section top is 20% down viewport
+                end: 'top top',          // When section top is 20% down viewport
                 scrub: true
             }
         }
@@ -568,10 +788,10 @@ function initScaleAnimations() {
 
     gsap.fromTo('#aum-video',
         {
-            x: "-25%"
+            y: -100
         },
         {
-            x: 0,
+            y: 0,
             ease: 'none',
             scrollTrigger: {
                 trigger: '#aum-section',
@@ -616,8 +836,10 @@ function initScaleAnimations() {
 }
 
 function initLogoScroll() {
-    gsap.to('#logo-scroll-container', {
-        x: -500,
+    gsap.fromTo('#logo-scroll-container', 
+        { x:0 },
+        {
+        x:-500,
         ease: 'none',
         scrollTrigger: {
             trigger: '#logo-scroll-container',
@@ -707,11 +929,11 @@ function initQuoteAnimation() {
 function init() {
     // Clear any cached scroll calculations from previous sessions
     ScrollTrigger.clearScrollMemory();
-    
+
     // Reset scroll position again to ensure clean state
     window.scrollTo(0, 0);
     lenis.scrollTo(0, { immediate: true });
-    
+
     // Small delay to ensure DOM has fully reflowed after scroll reset
     requestAnimationFrame(() => {
         initCameraAnimations();
@@ -721,7 +943,7 @@ function init() {
         initLogoScroll();
         initStickyImageSection();
         initQuoteAnimation();
-        
+
         // Force ScrollTrigger to recalculate after all animations are set up
         ScrollTrigger.refresh(true);
     });
@@ -739,11 +961,29 @@ window.addEventListener('load', () => {
 // ============================================================================
 
 let resizeTimeout;
+let lastBreakpoint = null;
+
+/**
+ * Get the current breakpoint based on viewport width
+ */
+function getCurrentBreakpoint() {
+    const width = window.innerWidth;
+    const breakpoints = Object.keys(CAMERA_KEYFRAMES_BY_BREAKPOINT)
+        .map(Number)
+        .sort((a, b) => a - b);
+
+    for (const bp of breakpoints) {
+        if (width <= bp) {
+            return bp;
+        }
+    }
+    return breakpoints[breakpoints.length - 1];
+}
 
 function onWindowResize() {
     // Debounce resize to prevent rapid recalculations
     clearTimeout(resizeTimeout);
-    
+
     resizeTimeout = setTimeout(() => {
         // Use viewport dimensions directly - container dimensions can be
         // corrupted by ScrollTrigger pin calculations
@@ -753,10 +993,31 @@ function onWindowResize() {
         camera.updateProjectionMatrix();
         renderer.setSize(width, height);
 
+        // Check if breakpoint changed
+        const currentBreakpoint = getCurrentBreakpoint();
+        const breakpointChanged = lastBreakpoint !== null && lastBreakpoint !== currentBreakpoint;
+        lastBreakpoint = currentBreakpoint;
+
+        if (breakpointChanged) {
+            // Breakpoint changed - reinitialize camera animations with new keyframes
+            // Kill existing camera ScrollTrigger to prevent duplicates
+            ScrollTrigger.getAll().forEach(st => {
+                if (st.vars.trigger === document.querySelector('.hero-section')) {
+                    st.kill();
+                }
+            });
+
+            // Reinitialize with new keyframes
+            initCameraAnimations();
+        }
+
         // Force complete ScrollTrigger recalculation
         ScrollTrigger.refresh(true);
     }, 150);
 }
+
+// Initialize lastBreakpoint
+lastBreakpoint = getCurrentBreakpoint();
 
 window.addEventListener('resize', onWindowResize);
 
