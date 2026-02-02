@@ -33,8 +33,30 @@
 
 @layer components {
   .hero-section {
-    background: linear-gradient(235deg, #982B7B 0%, #2E3373 119.43%);
     position: relative; /* Needed for absolute positioning of model-section */
+  }
+
+  /* Gradient overlays for smooth background transitions */
+  .hero-gradient {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .hero-gradient-purple {
+    background: linear-gradient(235deg, #982B7B 0%, #2E3373 119.43%);
+  }
+
+  .hero-gradient-teal {
+    background: linear-gradient(85deg, #016469 0%, #007B81 46.84%, #02666B 99.47%);
+    opacity: 0; /* Hidden by default, GSAP will animate this */
+  }
+
+  /* Ensure hero content appears above gradient overlays */
+  .hero-section > *:not(.hero-gradient) {
+    position: relative;
+    z-index: 1;
   }
   
   /* Ensure subsequent sections appear above frozen hero section */
@@ -53,13 +75,24 @@
   }
 
   .model-section {
-    @apply fixed top-0 left-0 w-full h-[100vh] z-0;
-    /* pointer-events: none; */
-     /* Allow text to be clickable */
+    @apply fixed top-0 left-0;
+    width: 100vw !important;  /* Use viewport units, not percentages */
+    height: 100vh !important;
+    max-width: 100vw !important; /* Prevent any overflow */
+    z-index: 5; /* Above hero background, below subsequent sections */
+    pointer-events: none; /* Allow clicking through to content */
+    overflow: hidden; /* Clip any overflow */
   }
 
   #canvas-container {
     @apply w-full h-full;
+    max-width: 100vw !important;
+    overflow: hidden;
+  }
+  
+  #canvas-container canvas {
+    max-width: 100vw !important;
+    max-height: 100vh !important;
   }
 
   #logo-scroll-container {
@@ -72,6 +105,7 @@
     flex-direction: row;
     align-items: center;
   }
+
 }
 
 @layer utilities {
@@ -92,10 +126,6 @@
 
     .text-section {
       @apply max-w-full py-10 px-8;
-    }
-
-    .model-section {
-      @apply absolute w-full h-full;
     }
   }
 }

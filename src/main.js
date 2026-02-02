@@ -1,27 +1,68 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import Lenis from '@studio-freight/lenis';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import './style.css';
 
-// Scene setup
-const scene = new THREE.Scene();
-scene.background = null; // Transparent background to show gradient
+// Register GSAP plugins
+gsap.registerPlugin(ScrollTrigger);
 
-// Camera setup
+// ============================================================================
+// IMMEDIATE MESSAGE HIDING - Run before page fully loads
+// ============================================================================
+// Use GSAP to set opacity to 0 immediately when DOM is ready
+function hideMessagesWithGSAP() {
+    const messages = ['#message-1 .hero-message', '#message-2 .hero-message', '#message-3 .hero-message', '#message-4 .hero-message'];
+    gsap.set(messages, {
+        opacity: 0,
+        y: 100,
+        visibility: 'visible', // Ensure visible so GSAP can control opacity
+        immediateRender: true // Apply immediately, don't wait for animation
+    });
+}
+
+// Run immediately if DOM is ready, otherwise wait for DOMContentLoaded
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', hideMessagesWithGSAP);
+} else {
+    hideMessagesWithGSAP();
+}
+
+// ============================================================================
+// SCROLL RESTORATION PREVENTION
+// Prevents browser from restoring scroll position on reload, which causes
+// ScrollTrigger initialization issues (gaps, visual glitches)
+// ============================================================================
+
+if ('scrollRestoration' in history) {
+    history.scrollRestoration = 'manual';
+}
+
+// Force scroll to top immediately on page load
+window.scrollTo(0, 0);
+
+// ============================================================================
+// THREE.JS SETUP
+// ============================================================================
+
+const scene = new THREE.Scene();
+scene.background = null;
+
 const container = document.getElementById('canvas-container');
-// Initialize with container dimensions, will be updated on resize
-let width = container.clientWidth || window.innerWidth;
-let height = container.clientHeight || window.innerHeight;
+// Use viewport dimensions directly for fixed-position elements
+// container.clientWidth can return incorrect values when ScrollTrigger manipulates DOM
+let width = window.innerWidth;
+let height = window.innerHeight;
 
 const camera = new THREE.PerspectiveCamera(30, width / height, 0.1, 400);
 camera.position.set(0, 0, 0);
 
-// Renderer setup
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setSize(width, height);
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.shadowMap.enabled = true;
-renderer.setClearColor(0x000000, 0); // Transparent background
+renderer.setClearColor(0x000000, 0);
 container.appendChild(renderer.domElement);
 
 // Lighting
@@ -37,93 +78,138 @@ const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
 directionalLight2.position.set(-5, 5, -5);
 scene.add(directionalLight2);
 
-// Preload all textures
+// Texture loading
 const textureLoader = new THREE.TextureLoader();
 const textures = {};
-const textureFiles = ['texture-1.png', 'texture-2.png', 'texture-3.png', 'texture-4.png'];
+const textureFiles = ['texture-1.jpg', 'texture-2.jpg', 'texture-3.jpg', 'texture-4.jpg', 'texture-5.jpg'];
 let texturesLoaded = 0;
 let currentTextureName = null;
 
-// Preload all textures
+// Cross-fade shader material for smooth texture transitions
+let screenMaterial = null;
+let isTransitioning = false;
+
+// Simple cross-fade shader (no Three.js includes to avoid conflicts)
+const crossFadeVertexShader = `
+    varying vec2 vUv;
+    void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+`;
+
+const crossFadeFragmentShader = `
+    uniform sampler2D map1;
+    uniform sampler2D map2;
+    uniform float mixFactor;
+    varying vec2 vUv;
+    
+    void main() {
+        // Only flip Y axis
+        vec2 flippedUv = vec2(vUv.x, 1.0 - vUv.y);
+        
+        vec4 color1 = texture2D(map1, flippedUv);
+        vec4 color2 = texture2D(map2, flippedUv);
+        
+        // Blend colors and force alpha to 1.0 (fully opaque)
+        vec3 finalColor = mix(color1.rgb, color2.rgb, mixFactor);
+        gl_FragColor = vec4(finalColor, 1.0);
+    }
+`;
+
+function createScreenMaterial(texture) {
+    const material = new THREE.ShaderMaterial({
+        uniforms: {
+            map1: { value: texture },
+            map2: { value: texture },
+            mixFactor: { value: 0.0 }
+        },
+        vertexShader: crossFadeVertexShader,
+        fragmentShader: crossFadeFragmentShader,
+        transparent: false,
+        depthWrite: true,
+        depthTest: true,
+        side: THREE.DoubleSide,
+        toneMapped: false  // Bypass Three.js color processing
+    });
+    material._isScreenMaterial = true;
+    return material;
+}
+
 textureFiles.forEach((filename) => {
     const texture = textureLoader.load(
         `/laptop.fbm/${filename}`,
         (loadedTexture) => {
             loadedTexture.flipY = false;
-            loadedTexture.colorSpace = THREE.SRGBColorSpace;
+            loadedTexture.colorSpace = THREE.NoColorSpace;  // Pass colors through exactly as-is
+            loadedTexture.needsUpdate = true;
             texturesLoaded++;
-            
-            // If model is already loaded and this is the first texture, apply it
+            console.log(`Texture loaded: ${filename} (${texturesLoaded}/${textureFiles.length})`);
+
+            // Apply first texture when it loads and model is ready
             if (model && texturesLoaded === 1) {
+                console.log('Model ready, applying first texture:', filename);
                 applyTextureToMaterials(model, filename);
                 currentTextureName = filename;
             }
         },
         undefined,
-        (error) => {
-            console.error(`Error loading texture ${filename}:`, error);
-        }
+        (error) => console.error(`Error loading texture ${filename}:`, error)
     );
     textures[filename] = texture;
 });
 
-// Function to apply texture to materials (specifically to Display Glass/screen materials)
+// Store reference to the screen mesh for direct texture application
+let screenMesh = null;
+
 function applyTextureToMaterials(object, textureName) {
     if (!textures[textureName]) {
-        console.warn(`Texture ${textureName} not found`);
+        console.warn('Texture not found:', textureName);
+        return;
+    }
+    const targetTexture = textures[textureName];
+    if (!targetTexture.image) {
+        console.warn('Texture image not loaded yet:', textureName);
         return;
     }
 
-    const targetTexture = textures[textureName];
-    
-    // Only apply if texture is loaded
-    if (!targetTexture.image) {
-        console.warn(`Texture ${textureName} image not loaded yet`);
-        return;
-    }
-    
     object.traverse((child) => {
         if (child.isMesh && child.material) {
             const materials = Array.isArray(child.material) ? child.material : [child.material];
-
             materials.forEach((material, materialIndex) => {
                 if (material) {
                     const materialName = (material.name || '').toLowerCase();
+                    const meshName = (child.name || '').toLowerCase();
                     
-                    // Check if this is Display Glass material OR if it's already a MeshBasicMaterial (converted screen)
-                    const isDisplayGlass = materialName === 'display glass' || material.type === 'MeshBasicMaterial';
-                    
+                    // Check if this is the display/screen material using flexible matching
+                    const isDisplayGlass = materialName.includes('display') || 
+                        materialName.includes('screen') || 
+                        materialName.includes('glass') ||
+                        materialName.includes('lcd') ||
+                        meshName.includes('display') ||
+                        meshName.includes('screen') ||
+                        meshName.includes('glass') ||
+                        meshName.includes('lcd') ||
+                        material._isScreenMaterial; // Our marker
+
                     if (isDisplayGlass) {
-                        // Clone the texture to avoid affecting other uses
-                        const flippedTexture = targetTexture.clone();
-                        // Flip texture vertically (Y) only
-                        flippedTexture.wrapS = THREE.RepeatWrapping;
-                        flippedTexture.wrapT = THREE.RepeatWrapping;
-                        flippedTexture.repeat.set(1, -1);
-                        flippedTexture.needsUpdate = true;
+                        screenMesh = child; // Store reference
+                        console.log('Applying texture to screen:', textureName);
                         
-                        // If it's already MeshBasicMaterial, just update the texture
-                        if (material.type === 'MeshBasicMaterial') {
-                            material.map = flippedTexture;
-                            material.needsUpdate = true;
+                        // Update existing shader material or create new one
+                        if (material._isScreenMaterial && material.uniforms) {
+                            // Instant swap - set both textures to target
+                            material.uniforms.map1.value = targetTexture;
+                            material.uniforms.map2.value = targetTexture;
+                            material.uniforms.mixFactor.value = 0.0;
                         } else {
-                            // Convert to MeshBasicMaterial so it's not affected by lighting
-                            // This makes it constantly bright and emissive
-                            const basicMaterial = new THREE.MeshBasicMaterial({
-                                map: flippedTexture,
-                                color: 0xffffff,
-                                transparent: false,
-                                opacity: 1.0
-                            });
-                            
-                            // Replace the material
+                            screenMaterial = createScreenMaterial(targetTexture);
+
                             if (Array.isArray(child.material)) {
-                                child.material[materialIndex] = basicMaterial;
+                                child.material[materialIndex] = screenMaterial;
                             } else {
-                                child.material = basicMaterial;
+                                child.material = screenMaterial;
                             }
-                            
-                            console.log(`Converted material "${material.name}" to MeshBasicMaterial for emissive screen`);
                         }
                     }
                 }
@@ -132,13 +218,69 @@ function applyTextureToMaterials(object, textureName) {
     });
 }
 
+/**
+ * Smoothly transition to a new texture using cross-fade
+ * @param {string} textureName - Name of the target texture
+ * @param {number} duration - Transition duration in seconds (default 0.4)
+ */
+function transitionToTexture(textureName, duration = 0.4) {
+    if (!textures[textureName]) return;
+    if (!textures[textureName].image) return;
+    if (!screenMaterial || !screenMaterial.uniforms) {
+        // Fallback: try to apply directly
+        if (model) applyTextureToMaterials(model, textureName);
+        return;
+    }
+    
+    const targetTexture = textures[textureName];
+    const uniforms = screenMaterial.uniforms;
+    
+    // If already showing this texture and not transitioning, skip
+    if (uniforms.map1.value === targetTexture && uniforms.mixFactor.value === 0 && !isTransitioning) {
+        return;
+    }
+    
+    // If transitioning to the same target, skip
+    if (isTransitioning && uniforms.map2.value === targetTexture) {
+        return;
+    }
+
+    // Kill any existing transition
+    gsap.killTweensOf(uniforms.mixFactor);
+
+    // If we're mid-transition, figure out current state
+    const currentMix = uniforms.mixFactor.value;
+    if (currentMix > 0.5) {
+        // More than halfway - treat map2 as current
+        uniforms.map1.value = uniforms.map2.value;
+        uniforms.mixFactor.value = 0;
+    } else if (currentMix > 0) {
+        // Less than halfway - reset to map1
+        uniforms.mixFactor.value = 0;
+    }
+
+    // Set up new transition
+    uniforms.map2.value = targetTexture;
+    isTransitioning = true;
+
+    gsap.to(uniforms.mixFactor, {
+        value: 1.0,
+        duration: duration,
+        ease: 'power2.inOut',
+        onComplete: () => {
+            // Swap textures so map1 is the current texture
+            uniforms.map1.value = targetTexture;
+            uniforms.map2.value = targetTexture;
+            uniforms.mixFactor.value = 0;
+            isTransitioning = false;
+        }
+    });
+}
+
 // Load FBX model
 const loader = new FBXLoader();
-
-// Set up loading manager to handle texture paths
 const loadingManager = new THREE.LoadingManager();
 loadingManager.setURLModifier((url) => {
-    // If the URL is a texture file, redirect to the .fbm folder
     if (url.includes('.png') || url.includes('.jpg') || url.includes('.jpeg')) {
         return '/laptop.fbm/' + url.split('/').pop();
     }
@@ -155,29 +297,73 @@ loader.load(
     (object) => {
         model = object;
 
-        // Log all materials and meshes to identify screen
-        console.log('=== Model Materials and Meshes ===');
+        // Debug: Log all mesh and material names to find the screen
+        console.log('=== FBX Model Structure ===');
+        object.traverse((child) => {
+            if (child.isMesh) {
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                console.log(`Mesh: "${child.name}"`, materials.map(m => `Material: "${m?.name}" (${m?.type})`));
+            }
+        });
+
+        // First, ensure the display glass material is not transparent
+        // This must happen before texture application to fix the transparent screen issue
         object.traverse((child) => {
             if (child.isMesh && child.material) {
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
-                materials.forEach((material) => {
-                    console.log(`Mesh: "${child.name}", Material: "${material.name}", Has texture: ${!!material.map}`);
+                materials.forEach((material, materialIndex) => {
+                    if (material) {
+                        const materialName = (material.name || '').toLowerCase();
+                        const meshName = (child.name || '').toLowerCase();
+                        
+                        // Check if this is the display/screen material by various patterns
+                        const isScreen = materialName.includes('display') || 
+                            materialName.includes('screen') || 
+                            materialName.includes('glass') ||
+                            materialName.includes('lcd') ||
+                            materialName.includes('monitor') ||
+                            meshName.includes('display') ||
+                            meshName.includes('screen') ||
+                            meshName.includes('glass') ||
+                            meshName.includes('lcd') ||
+                            meshName.includes('monitor') ||
+                            // Check if material is transparent (glass materials often are)
+                            (material.transparent === true && material.opacity < 1);
+                        
+                        if (isScreen) {
+                            console.log(`Found screen: Mesh="${child.name}", Material="${material.name}"`);
+                            screenMesh = child;
+                            
+                            // Create a base opaque material for the screen
+                            // This will be replaced by the cross-fade material when textures load
+                            const baseMaterial = new THREE.MeshBasicMaterial({
+                                color: 0x111111, // Dark gray placeholder (visible)
+                                transparent: false,
+                                opacity: 1.0,
+                                side: THREE.DoubleSide
+                            });
+                            baseMaterial.name = 'Display Glass';
+                            baseMaterial._isScreenMaterial = true;
+                            
+                            if (Array.isArray(child.material)) {
+                                child.material[materialIndex] = baseMaterial;
+                            } else {
+                                child.material = baseMaterial;
+                            }
+                        }
+                    }
                 });
             }
         });
-        console.log('===================================');
 
-        // Apply default texture if available
+        // Apply texture if already loaded
         if (texturesLoaded > 0) {
-            const defaultTexture = textures['texture-1.png'] || Object.values(textures)[0];
-            if (defaultTexture && defaultTexture.image) {
-                const textureName = textures['texture-1.png'] ? 'texture-1.png' : Object.keys(textures)[0];
-                applyTextureToMaterials(object, textureName);
-                currentTextureName = textureName;
-            }
+            const textureName = textures['texture-1.jpg'] ? 'texture-1.jpg' : Object.keys(textures)[0];
+            console.log('Applying initial texture:', textureName);
+            applyTextureToMaterials(object, textureName);
+            currentTextureName = textureName;
         }
 
-        // Scale and position the model
         const box = new THREE.Box3().setFromObject(object);
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
@@ -192,1153 +378,780 @@ loader.load(
 
         modelGroup.add(object);
     },
-    (progress) => {
-        console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
-    },
-    (error) => {
-        console.error('Error loading FBX:', error);
-    }
+    (progress) => console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%'),
+    (error) => console.error('Error loading FBX:', error)
 );
 
-// Timeline keyframe system
-// Define keyframes at different scroll percentages (0-100)
-// Parameters:
-//   rotation - controls position on orbit around origin (set by lookAtX/lookAtY)
-//   zoom - camera distance from origin (larger = further away)
-//   z - camera elevation above ground plane (Y coordinate in Three.js, positive = up, negative = down)
-//   lookAtX - horizontal origin point for rotation (optional, defaults to 0)
-//   lookAtY - vertical origin point for rotation (optional, defaults to 0)
-//   texture - texture filename (e.g., 'texture-1.png', 'texture-2.png', 'texture-3.png') - optional
-// If a parameter is not specified, it won't be animated at that keyframe
-const keyframes = [
-    {
-        scrollPercent: 0,        // Start of scroll
-        rotation: Math.PI / 2,    // Starting angle (0 = right, π/2 = front, π = left, 3π/2 = back)
-        zoom: 5,                 // Camera distance (larger = further away)
-        z: 4,                      // Camera elevation (Y coordinate)
-        lookAtX: 0,                // Rotation origin X
-        lookAtY: 3,               // Rotation origin Y
-        texture: 'texture-1.png'
-    },
-    {
-        scrollPercent: 15,
-        rotation: Math.PI / 2 - 0.4,
-        zoom: 10,
-        z: 2,
-        lookAtX: -1,
-        lookAtY: 0.3,
-        texture: 'texture-1.png'
-    },
-    {
-        scrollPercent: 25,
-        rotation: Math.PI / 2 - 0.4,
-        zoom: 10,
-        z: 2,
-        lookAtX: -1,
-        lookAtY: 0.3,
-        texture: 'texture-1.png'
-    },
-    {
-        scrollPercent: 40,
-        rotation: Math.PI - 1,
-        zoom: 10,
-        z: 2,
-        lookAtX: 1,
-        lookAtY: 0.3,
-        texture: 'texture-2.png'
-    },
-    {
-        scrollPercent: 50,
-        rotation: Math.PI - 1,
-        zoom: 10,
-        z: 2,
-        lookAtX: 1,
-        lookAtY: 0.3,
-        texture: 'texture-2.png'
-    },
-    {
-        scrollPercent: 55,
-        rotation: Math.PI / 2 - 0.4,
-        zoom: 10,
-        z: 2,
-        lookAtX: -1,
-        lookAtY: 0.3,
-        texture: 'texture-3.png'
-    },
-    {
-        scrollPercent: 65,
-        rotation: Math.PI / 2 - 0.4,
-        zoom: 10,
-        z: 2,
-        lookAtX: -1,
-        lookAtY: 0.3,
-        texture: 'texture-3.png'
-    },
-    {
-        scrollPercent: 80,
-        rotation: 1.256,
-        zoom: 12,
-        z: 2.5,
-        lookAtX: -2.2,
-        lookAtY: 0.66,
-        texture: 'texture-4.png'
-    },
-    {
-        scrollPercent: 100,
-        rotation: 1.256,
-        zoom: 12,
-        z: 2.5,
-        lookAtX: -2.2,
-        lookAtY: 0.66,
-        texture: 'texture-4.png'
-    },
-];
+// ============================================================================
+// LENIS SMOOTH SCROLL
+// ============================================================================
 
-// Helper function to interpolate between two values
-function lerp(start, end, t) {
-    return start + (end - start) * t;
-}
-
-// Helper function to get the last known value for an optional parameter
-function getLastKnownValue(keyframes, currentIndex, paramName) {
-    // Search backwards from current index to find last keyframe with this parameter
-    for (let i = currentIndex; i >= 0; i--) {
-        if (keyframes[i][paramName] !== undefined) {
-            return keyframes[i][paramName];
-        }
-    }
-    // If not found, search from the beginning to get first occurrence
-    for (let i = 0; i < keyframes.length; i++) {
-        if (keyframes[i][paramName] !== undefined) {
-            return keyframes[i][paramName];
-        }
-    }
-    return null;
-}
-
-// Helper function to get the next known value for an optional parameter
-function getNextKnownValue(keyframes, currentIndex, paramName) {
-    // Search forwards from current index to find next keyframe with this parameter
-    for (let i = currentIndex; i < keyframes.length; i++) {
-        if (keyframes[i][paramName] !== undefined) {
-            return keyframes[i][paramName];
-        }
-    }
-    // If not found, search backwards to get last occurrence
-    for (let i = keyframes.length - 1; i >= 0; i--) {
-        if (keyframes[i][paramName] !== undefined) {
-            return keyframes[i][paramName];
-        }
-    }
-    return null;
-}
-
-// Function to get camera parameters at a given scroll progress (0-1)
-function getCameraParamsAtProgress(progress) {
-    // Convert progress (0-1) to scroll percent (0-100)
-    const scrollPercent = progress * 100;
-
-    // Find the two keyframes to interpolate between
-    let prevKeyframeIndex = 0;
-    let nextKeyframeIndex = keyframes.length - 1;
-    let prevKeyframe = keyframes[0];
-    let nextKeyframe = keyframes[keyframes.length - 1];
-
-    for (let i = 0; i < keyframes.length - 1; i++) {
-        if (scrollPercent >= keyframes[i].scrollPercent && scrollPercent <= keyframes[i + 1].scrollPercent) {
-            prevKeyframeIndex = i;
-            nextKeyframeIndex = i + 1;
-            prevKeyframe = keyframes[i];
-            nextKeyframe = keyframes[i + 1];
-            break;
-        }
-    }
-
-    // Helper function to check if parameter exists in any keyframe
-    const hasParamInKeyframes = (paramName) => {
-        return keyframes.some(kf => kf[paramName] !== undefined);
-    };
-
-    // Helper function to get value for an optional parameter, handling missing values
-    const getParamValue = (paramName) => {
-        // If parameter doesn't exist in any keyframe, return null to indicate "not animated"
-        if (!hasParamInKeyframes(paramName)) {
-            return null;
-        }
-
-        const prevValue = prevKeyframe[paramName] !== undefined
-            ? prevKeyframe[paramName]
-            : getLastKnownValue(keyframes, prevKeyframeIndex, paramName);
-        const nextValue = nextKeyframe[paramName] !== undefined
-            ? nextKeyframe[paramName]
-            : getNextKnownValue(keyframes, nextKeyframeIndex, paramName);
-
-        // If either value is null (shouldn't happen if hasParamInKeyframes is true), return null
-        if (prevValue === null || nextValue === null) {
-            return null;
-        }
-
-        // If both are the same, return that value
-        if (prevValue === nextValue) {
-            return prevValue;
-        }
-
-        // Interpolate between the two values
-        const range = nextKeyframe.scrollPercent - prevKeyframe.scrollPercent;
-        const t = range > 0 ? (scrollPercent - prevKeyframe.scrollPercent) / range : 0;
-        return lerp(prevValue, nextValue, t);
-    };
-
-    // Helper function to get texture name (no interpolation, just use current keyframe's texture)
-    const getTextureName = () => {
-        // Use the next keyframe's texture if we're closer to it, otherwise use previous
-        const range = nextKeyframe.scrollPercent - prevKeyframe.scrollPercent;
-        const t = range > 0 ? (scrollPercent - prevKeyframe.scrollPercent) / range : 0;
-        
-        // If we're past halfway, use next texture, otherwise use previous
-        if (t >= 0.5 && nextKeyframe.texture !== undefined) {
-            return nextKeyframe.texture;
-        } else if (prevKeyframe.texture !== undefined) {
-            return prevKeyframe.texture;
-        }
-        // Find last known texture
-        return getLastKnownValue(keyframes, prevKeyframeIndex, 'texture');
-    };
-
-    // If before first keyframe, use first keyframe (or last known value for optional params)
-    if (scrollPercent < prevKeyframe.scrollPercent) {
-        return {
-            rotation: prevKeyframe.rotation,
-            zoom: prevKeyframe.zoom,
-            z: prevKeyframe.z !== undefined ? prevKeyframe.z : (hasParamInKeyframes('z') ? getLastKnownValue(keyframes, 0, 'z') : null),
-            lookAtY: prevKeyframe.lookAtY,
-            lookAtX: getParamValue('lookAtX'),
-            texture: prevKeyframe.texture !== undefined ? prevKeyframe.texture : (hasParamInKeyframes('texture') ? getLastKnownValue(keyframes, 0, 'texture') : null)
-        };
-    }
-
-    // If after last keyframe, use last keyframe (or last known value for optional params)
-    if (scrollPercent > nextKeyframe.scrollPercent) {
-        return {
-            rotation: nextKeyframe.rotation,
-            zoom: nextKeyframe.zoom,
-            z: nextKeyframe.z !== undefined ? nextKeyframe.z : (hasParamInKeyframes('z') ? getLastKnownValue(keyframes, keyframes.length - 1, 'z') : null),
-            lookAtY: nextKeyframe.lookAtY,
-            lookAtX: getParamValue('lookAtX'),
-            texture: nextKeyframe.texture !== undefined ? nextKeyframe.texture : (hasParamInKeyframes('texture') ? getLastKnownValue(keyframes, keyframes.length - 1, 'texture') : null)
-        };
-    }
-
-    // Calculate interpolation factor (0-1) between the two keyframes
-    const range = nextKeyframe.scrollPercent - prevKeyframe.scrollPercent;
-    const t = range > 0 ? (scrollPercent - prevKeyframe.scrollPercent) / range : 0;
-
-    // Handle texture: use the texture from the keyframe we're closest to
-    let textureName = null;
-    if (prevKeyframe.texture !== undefined || nextKeyframe.texture !== undefined) {
-        // If past halfway point, use next texture, otherwise use previous
-        if (t >= 0.5 && nextKeyframe.texture !== undefined) {
-            textureName = nextKeyframe.texture;
-        } else if (prevKeyframe.texture !== undefined) {
-            textureName = prevKeyframe.texture;
-        } else {
-            // Find last known texture
-            textureName = getLastKnownValue(keyframes, prevKeyframeIndex, 'texture');
-        }
-    }
-
-    // Interpolate all parameters (required ones always interpolate, optional ones use helper)
-    return {
-        rotation: lerp(prevKeyframe.rotation, nextKeyframe.rotation, t),
-        zoom: lerp(prevKeyframe.zoom, nextKeyframe.zoom, t),
-        z: getParamValue('z'),
-        lookAtY: lerp(prevKeyframe.lookAtY, nextKeyframe.lookAtY, t),
-        lookAtX: getParamValue('lookAtX'),
-        texture: textureName
-    };
-}
-
-// Parallax scroll speed system
-// Parse scroll speed keyframes from data-scroll-speed attribute
-// Speed values are intuitive multipliers relative to normal scroll:
-//   - speed = 0: element stays fixed (moves opposite to scroll to stay in place)
-//   - speed = 1: element scrolls normally with the page (no parallax offset)
-//   - speed = 2: element moves twice as fast as scroll
-//   - speed = 0.5: element moves half as fast (parallax background effect)
-function parseScrollSpeed(attributeValue) {
-    try {
-        // Parse JSON-like string: "{0:0.5, 25:1}"
-        const cleaned = attributeValue.replace(/(\w+):/g, '"$1":');
-        return JSON.parse(cleaned);
-    } catch (e) {
-        console.error('Error parsing scroll speed:', e);
-        return { 0: 1 }; // Default to normal speed (1 = scrolls with page)
-    }
-}
-
-// Get scroll speed at a given progress (0-1) based on keyframes
-// Returns speed multiplier: 0 = fixed, 1 = normal scroll, 2 = double speed, etc.
-function getScrollSpeedAtProgress(speedKeyframes, progress) {
-    const scrollPercent = progress * 100;
-    const keys = Object.keys(speedKeyframes).map(Number).sort((a, b) => a - b);
-
-    // If before first keyframe, use first value
-    if (scrollPercent <= keys[0]) {
-        return speedKeyframes[keys[0]];
-    }
-
-    // If after last keyframe, use last value
-    if (scrollPercent >= keys[keys.length - 1]) {
-        return speedKeyframes[keys[keys.length - 1]];
-    }
-
-    // Find the two keyframes to interpolate between
-    let prevKey = keys[0];
-    let nextKey = keys[keys.length - 1];
-
-    for (let i = 0; i < keys.length - 1; i++) {
-        if (scrollPercent >= keys[i] && scrollPercent <= keys[i + 1]) {
-            prevKey = keys[i];
-            nextKey = keys[i + 1];
-            break;
-        }
-    }
-
-    // Interpolate speed
-    const range = nextKey - prevKey;
-    const t = range > 0 ? (scrollPercent - prevKey) / range : 0;
-    return lerp(speedKeyframes[prevKey], speedKeyframes[nextKey], t);
-}
-
-// Calculate integral of linear speed segment
-// Integrates (1 - speed(p)) from segmentStart to segmentEnd
-// This ensures: speed = 1 → no offset, speed > 1 → moves faster, speed < 1 → moves slower
-// where speed(p) = speed1 + (speed2 - speed1) * (p - p1) / (p2 - p1)
-function integrateSpeedSegment(speed1, speed2, p1, p2, segmentStart, segmentEnd) {
-    // Linear interpolation: speed(p) = speed1 + (speed2 - speed1) * (p - p1) / (p2 - p1)
-    // Integral of (1 - speed(p)) from segmentStart to segmentEnd
-    const t1 = (segmentStart - p1) / (p2 - p1);
-    const t2 = (segmentEnd - p1) / (p2 - p1);
-    const speedAtStart = speed1 + (speed2 - speed1) * t1;
-    const speedAtEnd = speed1 + (speed2 - speed1) * t2;
-    
-    // Integral of linear function: average value * width
-    const avgSpeed = (speedAtStart + speedAtEnd) / 2;
-    const segmentWidth = segmentEnd - segmentStart;
-    
-    return segmentWidth * (1 - avgSpeed);
-}
-
-// Calculate parallax offset deterministically by integrating speed function
-// Returns exact pixel offset for given scroll position
-function calculateParallaxOffset(speedKeyframes, progress, maxScroll) {
-    const keys = Object.keys(speedKeyframes).map(Number).sort((a, b) => a - b);
-    
-    // If no keyframes, return 0
-    if (keys.length === 0) {
-        return 0;
-    }
-    
-    let totalOffset = 0;
-    let currentProgress = 0;
-    
-    // Handle segment from 0 to first keyframe if first keyframe is not at 0
-    const firstKeyProgress = keys[0] / 100;
-    if (firstKeyProgress > 0 && progress > 0) {
-        const firstSpeed = speedKeyframes[keys[0]];
-        const segmentEnd = Math.min(firstKeyProgress, progress);
-        // Constant speed from 0 to first keyframe
-        totalOffset += segmentEnd * (1 - firstSpeed);
-        currentProgress = segmentEnd;
-    }
-    
-    // Integrate through each segment between keyframes up to current progress
-    for (let i = 0; i < keys.length - 1; i++) {
-        const p1 = keys[i] / 100;
-        const p2 = keys[i + 1] / 100;
-        const speed1 = speedKeyframes[keys[i]];
-        const speed2 = speedKeyframes[keys[i + 1]];
-        
-        // Skip segments we've already processed
-        if (p2 <= currentProgress) continue;
-        
-        // Stop if we've passed the current progress
-        if (p1 > progress) break;
-        
-        // Calculate integral for the portion of this segment up to current progress
-        const segmentStart = Math.max(p1, currentProgress);
-        const segmentEnd = Math.min(p2, progress);
-        
-        // Only process if there's actually a segment to integrate
-        if (segmentEnd > segmentStart) {
-            // Calculate integral for this linear segment
-            const segmentOffset = integrateSpeedSegment(
-                speed1, speed2, 
-                p1, p2, 
-                segmentStart, segmentEnd
-            );
-            
-            totalOffset += segmentOffset;
-            currentProgress = segmentEnd;
-        }
-    }
-    
-    // Handle case where we're past all keyframes
-    const lastKeyProgress = keys[keys.length - 1] / 100;
-    if (progress > lastKeyProgress) {
-        const lastSpeed = speedKeyframes[keys[keys.length - 1]];
-        const remainingProgress = progress - lastKeyProgress;
-        totalOffset += remainingProgress * (1 - lastSpeed);
-    }
-    
-    return totalOffset * maxScroll; // Convert to pixels
-}
-
-// Initialize parallax elements
-function initParallaxElements() {
-    const elements = document.querySelectorAll('[data-scroll-speed]');
-    return Array.from(elements).map(el => {
-        const speedAttr = el.getAttribute('data-scroll-speed');
-        const speedKeyframes = parseScrollSpeed(speedAttr);
-        // Find the closest parent container (.container) or fall back to parent element
-        const parentContainer = el.closest('.container') || el.parentElement;
-        return {
-            element: el,
-            speedKeyframes: speedKeyframes,
-            parentContainer: parentContainer
-        };
-    });
-}
-
-// Calculate scroll progress for a container's journey through the viewport
-// Returns progress (0-1) where:
-//   0% = container first appears on screen (top of container reaches bottom of viewport)
-//   100% = container completely leaves the screen (bottom of container reaches top of viewport)
-function getContainerScrollProgress(container) {
-    const scrollY = currentScrollY;
-    const viewportHeight = window.innerHeight;
-    
-    // Use getBoundingClientRect for reliable positioning
-    const rect = container.getBoundingClientRect();
-    const containerTop = rect.top + scrollY; // Convert to absolute position
-    const containerHeight = rect.height;
-    const containerBottom = containerTop + containerHeight;
-    
-    // When container first appears: top of container reaches bottom of viewport
-    // At this point: scrollY + viewportHeight = containerTop
-    // So: scrollY = containerTop - viewportHeight
-    const enterPoint = containerTop - viewportHeight;
-    
-    // When container completely leaves: bottom of container reaches top of viewport
-    // At this point: scrollY = containerBottom
-    const exitPoint = containerBottom;
-    
-    // Total scroll range is: viewport height + container height
-    const scrollRange = exitPoint - enterPoint; // = containerHeight + viewportHeight
-    
-    if (scrollRange <= 0) {
-        return 0;
-    }
-    
-    const progress = (scrollY - enterPoint) / scrollRange;
-    return Math.max(0, Math.min(1, progress)); // Clamp between 0 and 1
-}
-
-// Update parallax elements based on scroll
-// Speed values are intuitive multipliers relative to normal scroll:
-//   - speed = 1: element scrolls normally (no parallax offset)
-//   - speed = 2: element moves twice as fast (forward/down)
-//   - speed = 0.5: element moves half as fast (parallax background effect, moves slower)
-//   - speed = 0: element stays fixed (moves opposite to scroll to stay in place)
-//   - speed = -2: element moves backwards (up) twice as fast
-// Progress is based on the closest parent .container's journey through the viewport
-function updateParallax(parallaxElements, scrollY) {
-    parallaxElements.forEach(({ element, speedKeyframes, parentContainer }) => {
-        // Skip if element also has scale keyframes (scale system will handle combined transform)
-        if (element.hasAttribute('data-scale-keyframes')) {
-            return;
-        }
-        
-        if (!parentContainer) {
-            return;
-        }
-        
-        // Calculate progress based on parent container's position in viewport
-        // 0% = container enters viewport, 100% = container completely leaves viewport
-        const progress = getContainerScrollProgress(parentContainer);
-        
-        // Calculate maxScroll for pixel conversion
-        // Use container height + viewport height as the total scroll distance
-        const viewportHeight = window.innerHeight;
-        const maxScroll = parentContainer.offsetHeight + viewportHeight;
-        
-        // Calculate exact offset deterministically by integrating speed function
-        // Formula integrates (1 - speed) so: speed=1 → 0 offset, speed>1 → negative offset (moves faster forward)
-        const translateY = calculateParallaxOffset(speedKeyframes, progress, maxScroll);
-        element.style.transform = `translateY(${translateY}px)`;
-        element.style.willChange = 'transform'; // Hardware acceleration hint
-    });
-}
-
-// Scroll opacity system
-// Parse scroll opacity keyframes from data-scroll-opacity attribute
-function parseScrollOpacity(attributeValue) {
-    try {
-        // Parse JSON-like string: "{0:1, 15:1, 25:0}"
-        const cleaned = attributeValue.replace(/(\w+):/g, '"$1":');
-        return JSON.parse(cleaned);
-    } catch (e) {
-        console.error('Error parsing scroll opacity:', e);
-        return { 0: 1 }; // Default to fully visible
-    }
-}
-
-// Get opacity at a given progress (0-1) based on keyframes
-function getOpacityAtProgress(opacityKeyframes, progress) {
-    const scrollPercent = progress * 100;
-    const keys = Object.keys(opacityKeyframes).map(Number).sort((a, b) => a - b);
-
-    // If before first keyframe, use first value
-    if (scrollPercent <= keys[0]) {
-        return opacityKeyframes[keys[0]];
-    }
-
-    // If after last keyframe, use last value
-    if (scrollPercent >= keys[keys.length - 1]) {
-        return opacityKeyframes[keys[keys.length - 1]];
-    }
-
-    // Find the two keyframes to interpolate between
-    let prevKey = keys[0];
-    let nextKey = keys[keys.length - 1];
-
-    for (let i = 0; i < keys.length - 1; i++) {
-        if (scrollPercent >= keys[i] && scrollPercent <= keys[i + 1]) {
-            prevKey = keys[i];
-            nextKey = keys[i + 1];
-            break;
-        }
-    }
-
-    // Interpolate opacity
-    const range = nextKey - prevKey;
-    const t = range > 0 ? (scrollPercent - prevKey) / range : 0;
-    return lerp(opacityKeyframes[prevKey], opacityKeyframes[nextKey], t);
-}
-
-// Initialize opacity elements
-function initOpacityElements() {
-    const elements = document.querySelectorAll('[data-scroll-opacity]');
-    return Array.from(elements).map(el => {
-        const opacityAttr = el.getAttribute('data-scroll-opacity');
-        const opacityKeyframes = parseScrollOpacity(opacityAttr);
-        // Find the closest parent container (.container) or fall back to parent element
-        const parentContainer = el.closest('.container') || el.parentElement;
-        return {
-            element: el,
-            opacityKeyframes: opacityKeyframes,
-            parentContainer: parentContainer
-        };
-    });
-}
-
-// Update opacity elements based on scroll
-// Progress is based on the closest parent .container's journey through the viewport
-function updateOpacity(opacityElements, scrollY) {
-    opacityElements.forEach(({ element, opacityKeyframes, parentContainer }) => {
-        if (!parentContainer) {
-            return;
-        }
-        
-        // Calculate progress based on parent container's position in viewport
-        // 0% = container enters viewport, 100% = container completely leaves viewport
-        const progress = getContainerScrollProgress(parentContainer);
-        
-        const opacity = getOpacityAtProgress(opacityKeyframes, progress);
-        element.style.opacity = opacity;
-        element.style.willChange = 'opacity'; // Hardware acceleration hint
-    });
-}
-
-// Scale keyframe system
-// Parse scale keyframes from data-scale-keyframes attribute
-function parseScaleKeyframes(attributeValue) {
-    try {
-        // Parse JSON-like string: "{0:2, 1:1}"
-        const cleaned = attributeValue.replace(/(\w+):/g, '"$1":');
-        return JSON.parse(cleaned);
-    } catch (e) {
-        console.error('Error parsing scale keyframes:', e);
-        return { 0: 1 }; // Default to no scaling
-    }
-}
-
-// Get scale at a given progress (0-1) based on keyframes
-function getScaleAtProgress(scaleKeyframes, progress) {
-    const progressPercent = progress * 100;
-    const keys = Object.keys(scaleKeyframes).map(Number).sort((a, b) => a - b);
-
-    // If before first keyframe, use first value
-    if (progressPercent <= keys[0]) {
-        return scaleKeyframes[keys[0]];
-    }
-
-    // If after last keyframe, use last value
-    if (progressPercent >= keys[keys.length - 1]) {
-        return scaleKeyframes[keys[keys.length - 1]];
-    }
-
-    // Find the two keyframes to interpolate between
-    let prevKey = keys[0];
-    let nextKey = keys[keys.length - 1];
-
-    for (let i = 0; i < keys.length - 1; i++) {
-        if (progressPercent >= keys[i] && progressPercent <= keys[i + 1]) {
-            prevKey = keys[i];
-            nextKey = keys[i + 1];
-            break;
-        }
-    }
-
-    // Interpolate scale
-    const range = nextKey - prevKey;
-    const t = range > 0 ? (progressPercent - prevKey) / range : 0;
-    return lerp(scaleKeyframes[prevKey], scaleKeyframes[nextKey], t);
-}
-
-// Calculate scroll progress for a specific element
-// Returns progress (0-1) where:
-//   0 = section enters viewport (top of section reaches bottom of viewport)
-//   1 = bottom of viewport touches end of section (viewport bottom reaches section bottom)
-function getElementScrollProgress(element) {
-    const scrollY = currentScrollY;
-    const viewportHeight = window.innerHeight;
-    
-    // Use getBoundingClientRect for more reliable positioning
-    const rect = element.getBoundingClientRect();
-    const elementTop = rect.top + scrollY; // Convert to absolute position
-    const elementHeight = rect.height;
-    const elementBottom = elementTop + elementHeight;
-    
-    // When section enters viewport: top of section reaches bottom of viewport
-    // At this point: scrollY + viewportHeight = elementTop
-    // So: scrollY = elementTop - viewportHeight
-    const enterPoint = elementTop - viewportHeight;
-    
-    // When bottom of viewport touches end of section: viewport bottom reaches section bottom
-    // At this point: scrollY + viewportHeight = elementBottom
-    // So: scrollY = elementBottom - viewportHeight
-    const exitPoint = elementBottom - viewportHeight;
-    
-    const scrollRange = exitPoint - enterPoint;
-    if (scrollRange <= 0) {
-        // Element is smaller than viewport or already past
-        if (scrollY >= exitPoint) return 1;
-        if (scrollY >= enterPoint) return 0;
-        return 0;
-    }
-    
-    const progress = (scrollY - enterPoint) / scrollRange;
-    return Math.max(0, Math.min(1, progress)); // Clamp between 0 and 1
-}
-
-// Initialize scale elements
-function initScaleElements() {
-    const elements = document.querySelectorAll('[data-scale-keyframes]');
-    console.log(`Found ${elements.length} scale elements`);
-    return Array.from(elements).map(el => {
-        const scaleAttr = el.getAttribute('data-scale-keyframes');
-        const scaleKeyframes = parseScaleKeyframes(scaleAttr);
-        console.log('Scale keyframes:', scaleKeyframes);
-        return {
-            element: el,
-            scaleKeyframes: scaleKeyframes
-        };
-    });
-}
-
-// Update scale elements based on scroll
-function updateScale(scaleElements) {
-    scaleElements.forEach(({ element, scaleKeyframes }) => {
-        // Calculate progress for this specific element (0 = enters viewport, 1 = exits viewport)
-        const progress = getElementScrollProgress(element);
-        
-        // Get interpolated scale value (progress is 0-1, keyframes are 0-100)
-        const scale = getScaleAtProgress(scaleKeyframes, progress);
-        
-        // Check if element also has parallax (translateY)
-        const hasParallax = element.hasAttribute('data-scroll-speed');
-        let parallaxTranslateY = '';
-        
-        if (hasParallax) {
-            // Get parallax offset if element has parallax
-            const parallaxData = parallaxElements.find(p => p.element === element);
-            if (parallaxData && parallaxData.parentContainer) {
-                // Use container-based progress for parallax
-                const containerProgress = getContainerScrollProgress(parallaxData.parentContainer);
-                const viewportHeight = window.innerHeight;
-                const maxScroll = parallaxData.parentContainer.offsetHeight + viewportHeight;
-                const translateY = calculateParallaxOffset(parallaxData.speedKeyframes, containerProgress, maxScroll);
-                parallaxTranslateY = ` translateY(${translateY}px)`;
-            }
-        }
-        
-        // Apply combined transform (scale + optional translateY)
-        element.style.transform = `scale(${scale})${parallaxTranslateY}`;
-        element.style.willChange = 'transform'; // Hardware acceleration hint
-    });
-}
-
-// Initialize parallax elements
-const parallaxElements = initParallaxElements();
-
-// Initialize opacity elements
-const opacityElements = initOpacityElements();
-
-// Initialize scale elements
-const scaleElements = initScaleElements();
-
-let scrollProgress = 0;
-let heroSectionOriginalTop = null; // Store original hero section position
-let heroSectionOriginalHeight = null;
-
-// Initialize Lenis smooth scroll
 const lenis = new Lenis({
     duration: 1.2,
-    easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)), // easeOutExpo
+    easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
     smooth: true,
-    smoothTouch: false, // Disable smooth scrolling on touch devices for better performance
+    smoothTouch: false,
     touchMultiplier: 2,
 });
 
-// Store current scroll position from Lenis
-let currentScrollY = 0;
+// Reset Lenis scroll position to top immediately
+lenis.scrollTo(0, { immediate: true });
 
-// Logo scroll animation
-let logoScrollContainer = null;
-let logoSetWidth = 0;
+// Connect Lenis to GSAP ScrollTrigger
+lenis.on('scroll', ScrollTrigger.update);
 
-// Initialize logo scroll container
-function initLogoScroll() {
-    logoScrollContainer = document.getElementById('logo-scroll-container');
-    if (!logoScrollContainer) return;
-    
-    // Calculate width of one logo set (including gaps)
-    // Wait for images to load to get accurate width
-    const images = logoScrollContainer.querySelectorAll('img');
-    let imagesLoaded = 0;
-    
-    if (images.length === 0) {
-        // No images, calculate width immediately
-        const firstSet = logoScrollContainer.querySelector('.logo-set');
-        if (firstSet) {
-            logoSetWidth = firstSet.offsetWidth;
-            updateLogoScroll(); // Initial position
-        }
-        return;
-    }
-    
-    // Wait for all images to load
-    images.forEach((img) => {
-        if (img.complete) {
-            imagesLoaded++;
-            if (imagesLoaded === images.length) {
-                calculateLogoSetWidth();
-            }
-        } else {
-            img.addEventListener('load', () => {
-                imagesLoaded++;
-                if (imagesLoaded === images.length) {
-                    calculateLogoSetWidth();
-                }
-            });
-        }
-    });
-}
-
-function calculateLogoSetWidth() {
-    const firstSet = logoScrollContainer?.querySelector('.logo-set');
-    if (firstSet) {
-        logoSetWidth = firstSet.offsetWidth;
-        updateLogoScroll(); // Set initial position
-    }
-}
-
-// Update logo scroll position based on page scroll
-// Track the scroll position when logos section becomes visible
-let logoScrollStartY = null;
-let logoInitialOffset = 0;
-
-function updateLogoScroll() {
-    if (!logoScrollContainer) return;
-    
-    // Calculate initial offset to center logos (only once)
-    if (logoInitialOffset === 0 && logoSetWidth > 0) {
-        // Start with logos shifted left so they fill the visible area
-        logoInitialOffset = logoSetWidth * 0.5;
-    }
-    
-    // Get the logo container's position relative to viewport
-    const containerRect = logoScrollContainer.getBoundingClientRect();
-    const isVisible = containerRect.top < window.innerHeight && containerRect.bottom > 0;
-    
-    // Initialize start position when logos first become visible
-    if (isVisible && logoScrollStartY === null) {
-        logoScrollStartY = currentScrollY;
-    }
-    
-    // Only animate when visible and initialized
-    if (logoScrollStartY === null) return;
-    
-    // Calculate relative scroll (how much we've scrolled since logos became visible)
-    const relativeScroll = currentScrollY - logoScrollStartY;
-    
-    // Speed multiplier: pixels of logo movement per pixel of page scroll
-    const speedMultiplier = 0.4;
-    
-    // Simple linear translation - no modulo, no jumps
-    // Start with initial offset so logos fill the visible area from the left
-    const translateX = -logoInitialOffset - (relativeScroll * speedMultiplier);
-    
-    logoScrollContainer.style.transform = `translateX(${translateX}px)`;
-    logoScrollContainer.style.willChange = 'transform';
-}
-
-// Calculate scroll progress based on .hero-section instead of full page
-// Returns progress (0-1) where 0 = hero section at top of viewport, 1 = hero section fully scrolled past
-function getHeroSectionProgress() {
-    const heroSection = document.querySelector('.hero-section');
-    if (!heroSection) {
-        // Fallback to full page scroll if hero section not found
-        const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-        return Math.min(currentScrollY / maxScroll, 1);
-    }
-    
-    const scrollY = currentScrollY;
-    const heroSectionTop = heroSection.offsetTop;
-    const heroSectionHeight = heroSection.offsetHeight;
-    const viewportHeight = window.innerHeight;
-    
-    // When hero section starts entering viewport
-    const heroSectionStart = heroSectionTop;
-    // When hero section is fully scrolled past (bottom reaches top of viewport)
-    const heroSectionEnd = heroSectionTop + heroSectionHeight - viewportHeight;
-    
-    // Calculate progress within hero section
-    const scrollRange = heroSectionEnd - heroSectionStart;
-    if (scrollRange <= 0) {
-        // If section is smaller than viewport, return 0 or 1 based on position
-        return scrollY >= heroSectionStart ? 1 : 0;
-    }
-    
-    const progress = (scrollY - heroSectionStart) / scrollRange;
-    return Math.max(0, Math.min(1, progress)); // Clamp between 0 and 1
-}
-
-function updateCamera() {
-    const scrollY = currentScrollY;
-    scrollProgress = getHeroSectionProgress();
-
-    // Get interpolated camera parameters from keyframes
-    const params = getCameraParamsAtProgress(scrollProgress);
-
-    // Update debug panel with all animated properties
-    const scrollPercentElement = document.getElementById('scroll-percent');
-    if (scrollPercentElement) {
-        const scrollPercent = (scrollProgress * 100).toFixed(2);
-        scrollPercentElement.textContent = scrollPercent;
-    }
-    
-    const rotationElement = document.getElementById('debug-rotation');
-    if (rotationElement) {
-        rotationElement.textContent = params.rotation.toFixed(3);
-    }
-    
-    const zoomElement = document.getElementById('debug-zoom');
-    if (zoomElement) {
-        zoomElement.textContent = params.zoom.toFixed(2);
-    }
-    
-    const zElement = document.getElementById('debug-z');
-    if (zElement) {
-        zElement.textContent = (params.z !== null && params.z !== undefined ? params.z : 0).toFixed(2);
-    }
-    
-    const lookAtXElement = document.getElementById('debug-lookatx');
-    if (lookAtXElement) {
-        const lookAtX = params.lookAtX !== null && params.lookAtX !== undefined ? params.lookAtX : 0;
-        lookAtXElement.textContent = lookAtX.toFixed(2);
-    }
-    
-    const lookAtYElement = document.getElementById('debug-lookaty');
-    if (lookAtYElement) {
-        const lookAtY = params.lookAtY !== null && params.lookAtY !== undefined ? params.lookAtY : 0;
-        lookAtYElement.textContent = lookAtY.toFixed(2);
-    }
-    
-    const textureElement = document.getElementById('debug-texture');
-    if (textureElement) {
-        textureElement.textContent = params.texture !== null && params.texture !== undefined ? params.texture : '-';
-    }
-
-    // Set camera position based on rotation and zoom
-    // X and Z are always calculated from rotation and zoom (circular orbit)
-    // Z parameter controls camera elevation (Y coordinate in Three.js)
-    camera.position.x = Math.cos(params.rotation) * params.zoom;
-    camera.position.z = Math.sin(params.rotation) * params.zoom;
-    camera.position.y = params.z !== null && params.z !== undefined ? params.z : 0;
-
-    // Set camera lookAt point (rotation origin)
-    // If lookAtX/lookAtY are specified in keyframes, use them; otherwise use defaults
-    const lookAtX = params.lookAtX !== null && params.lookAtX !== undefined ? params.lookAtX : 0;
-    const lookAtY = params.lookAtY !== null && params.lookAtY !== undefined ? params.lookAtY : 0;
-    
-    camera.lookAt(lookAtX, lookAtY, 0);
-
-    // Handle texture swaps
-    if (model && params.texture !== null && params.texture !== undefined) {
-        const targetTexture = params.texture;
-        
-        // Only update if texture changed
-        if (targetTexture !== currentTextureName) {
-            currentTextureName = targetTexture;
-            applyTextureToMaterials(model, targetTexture);
-        }
-    }
-
-    // Update parallax elements
-    updateParallax(parallaxElements, scrollY);
-    
-    // Update opacity elements
-    updateOpacity(opacityElements, scrollY);
-    
-    // Update scale elements
-    updateScale(scaleElements);
-    
-    // Handle hero section freezing: when fully scrolled, freeze at bottom and let next sections cover it
-    const heroSection = document.querySelector('.hero-section');
-    const spacer = document.getElementById('hero-section-spacer');
-    
-    if (heroSection && spacer) {
-        const scrollY = currentScrollY;
-        const viewportHeight = window.innerHeight;
-        
-        // Store original position/height on first run (before it becomes fixed)
-        if (heroSectionOriginalTop === null || !heroSection.classList.contains('hero-section-frozen')) {
-            heroSectionOriginalTop = heroSection.offsetTop;
-            heroSectionOriginalHeight = heroSection.offsetHeight;
-        }
-        
-        // Calculate when hero section should freeze (using original position)
-        const heroSectionBottom = heroSectionOriginalTop + heroSectionOriginalHeight;
-        const freezeThreshold = heroSectionBottom - viewportHeight;
-        
-        // When hero section is fully scrolled past (bottom reaches top of viewport)
-        const shouldFreeze = scrollY >= freezeThreshold;
-        
-        if (shouldFreeze) {
-            // Freeze hero section at bottom of viewport
-            if (!heroSection.classList.contains('hero-section-frozen')) {
-                heroSection.classList.add('hero-section-frozen');
-                heroSection.style.position = 'fixed';
-                heroSection.style.bottom = '0';
-                heroSection.style.top = 'auto';
-                heroSection.style.left = '0';
-                heroSection.style.width = '100%';
-                heroSection.style.zIndex = '1';
-                
-                // Show spacer to maintain scroll position (prevents jump)
-                spacer.style.display = 'block';
-                spacer.style.height = `${heroSectionOriginalHeight}px`;
-            }
-        } else {
-            // Unfreeze when scrolling back up
-            if (heroSection.classList.contains('hero-section-frozen')) {
-                heroSection.classList.remove('hero-section-frozen');
-                heroSection.style.position = '';
-                heroSection.style.bottom = '';
-                heroSection.style.top = '';
-                heroSection.style.left = '';
-                heroSection.style.width = '';
-                heroSection.style.zIndex = '';
-                
-                // Hide spacer
-                spacer.style.display = 'none';
-                spacer.style.height = '';
-                
-                // Reset stored values so they can be recalculated
-                heroSectionOriginalTop = null;
-                heroSectionOriginalHeight = null;
-            }
-        }
-    }
-}
-
-// Handle window resize
-function onWindowResize() {
-    width = container.clientWidth || window.innerWidth;
-    height = container.clientHeight || window.innerHeight;
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
-    renderer.setSize(width, height);
-}
-
-// Initial resize to set proper dimensions
-onWindowResize();
-
-window.addEventListener('resize', () => {
-    onWindowResize();
-    // Recalculate logo set width on resize
-    calculateLogoSetWidth();
+gsap.ticker.add((time) => {
+    lenis.raf(time * 1000);
 });
 
-// Initialize logo scroll after DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        initLogoScroll();
-        initQuoteWords();
-    });
-} else {
-    initLogoScroll();
-    initQuoteWords();
+gsap.ticker.lagSmoothing(0);
+
+// ============================================================================
+// CAMERA BREAKPOINTS
+// Only configuration needed - camera positions vary by viewport width
+// All other animation values are directly in GSAP calls
+// ============================================================================
+
+const CAMERA_BREAKPOINTS = {
+    // Mobile: max-width 768px
+    768: {
+        initial:  { rotation: Math.PI / 2, zoom: 15, elevation: 4, lookAtX: 0, lookAtY: 3 },
+        message1: { rotation: Math.PI / 2, zoom: 14, elevation: 6.5, lookAtX: 0, lookAtY: 3.5 },
+        message2: { rotation: Math.PI / 2, zoom: 13, elevation: 7, lookAtX: 0, lookAtY: 2.5 },
+        message3: { rotation: Math.PI / 2, zoom: 12, elevation: 4, lookAtX: 0, lookAtY: 2.5 },
+        message4: { rotation: Math.PI / 2, zoom: 11, elevation: 4, lookAtX: 0, lookAtY: 3 }
+    },
+
+    // Tablet: max-width 960px
+    960: {
+        initial:  { rotation: Math.PI / 2, zoom: 10, elevation: 4, lookAtX: 0, lookAtY: 3 },
+        message1: { rotation: Math.PI / 2 - 0.3, zoom: 16, elevation: 6.5, lookAtX: 0.5, lookAtY: 3.5 },
+        message2: { rotation: Math.PI / 2, zoom: 13, elevation: 6, lookAtX: 0, lookAtY: 3 },
+        message3: { rotation: Math.PI / 2, zoom: 12, elevation: 4, lookAtX: 0, lookAtY: 2.5 },
+        message4: { rotation: Math.PI / 2, zoom: 11, elevation: 4, lookAtX: 0, lookAtY: 3 }
+    },
+
+    // Small desktop: max-width 1080px
+    1080: {
+        initial:  { rotation: Math.PI / 2, zoom: 8, elevation: 4, lookAtX: 0, lookAtY: 3 },
+        message1: { rotation: Math.PI / 2 - 0.4, zoom: 10, elevation: 2.5, lookAtX: -2, lookAtY: 0.5 },
+        message2: { rotation: Math.PI / 2 + 0.4, zoom: 9, elevation: 2.5, lookAtX: 2, lookAtY: 0.5 },
+        message3: { rotation: Math.PI / 2 - 0.4, zoom: 9, elevation: 2.5, lookAtX: -2, lookAtY: 0.5 },
+        message4: { rotation: Math.PI / 2 - 0.4, zoom: 12, elevation: 2.5, lookAtX: -3, lookAtY: 0.5 }
+    },
+
+    // Medium desktop: max-width 1280px
+    1280: {
+        initial:  { rotation: Math.PI / 2, zoom: 7, elevation: 4, lookAtX: 0, lookAtY: 3 },
+        message1: { rotation: Math.PI / 2 - 0.4, zoom: 9, elevation: 2.5, lookAtX: -2, lookAtY: 0.5 },
+        message2: { rotation: Math.PI / 2 + 0.4, zoom: 9, elevation: 2.5, lookAtX: 2, lookAtY: 0.5 },
+        message3: { rotation: Math.PI / 2 - 0.4, zoom: 9, elevation: 2.5, lookAtX: -2, lookAtY: 0.5 },
+        message4: { rotation: Math.PI / 2 - 0.4, zoom: 12, elevation: 2.5, lookAtX: -3, lookAtY: 0.5 }
+    },
+
+    // Large desktop: > 1280px (9999 = infinity)
+    9999: {
+        initial:  { rotation: Math.PI / 2, zoom: 5, elevation: 4, lookAtX: 0, lookAtY: 3 },
+        message1: { rotation: Math.PI / 2 - 0.4, zoom: 10, elevation: 2, lookAtX: -1, lookAtY: 0.3 },
+        message2: { rotation: Math.PI - 1, zoom: 10, elevation: 2, lookAtX: 1, lookAtY: 0.3 },
+        message3: { rotation: Math.PI / 2 - 0.4, zoom: 10, elevation: 2, lookAtX: -1, lookAtY: 0.3 },
+        message4: { rotation: 1.256, zoom: 12, elevation: 2.5, lookAtX: -2.2, lookAtY: 0.66 }
+    }
+};
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Get camera keyframes for current viewport width
+ */
+function getCameraForViewport() {
+    const width = window.innerWidth;
+    const breakpoints = Object.keys(CAMERA_BREAKPOINTS).map(Number).sort((a, b) => a - b);
+    
+    for (const bp of breakpoints) {
+        if (width <= bp) return CAMERA_BREAKPOINTS[bp];
+    }
+    return CAMERA_BREAKPOINTS[breakpoints[breakpoints.length - 1]];
 }
 
-// Sticky image section - change image based on which message is in view
-function updateStickyImage() {
-    const stickyImage = document.getElementById('sticky-section-image');
-    const messageTriggers = document.querySelectorAll('.message-trigger');
-    
-    if (!stickyImage || messageTriggers.length === 0) return;
-    
-    const viewportCenter = window.innerHeight / 2;
-    let activeImageSrc = null;
-    
-    messageTriggers.forEach((trigger) => {
-        const rect = trigger.getBoundingClientRect();
-        // Check if the message is in the center area of the viewport
-        if (rect.top <= viewportCenter && rect.bottom >= viewportCenter) {
-            activeImageSrc = trigger.getAttribute('data-image');
-        }
-    });
-    
-    // Update image if a new one should be shown
-    if (activeImageSrc && stickyImage.src !== new URL(activeImageSrc, window.location.origin).href) {
-        stickyImage.src = activeImageSrc;
+// Current camera keyframes (updated on init and resize)
+let CAM = getCameraForViewport();
+
+// ============================================================================
+// CAMERA STATE (controlled by GSAP)
+// Initialized from CAMERA_BREAKPOINTS for correct values from first frame
+// ============================================================================
+
+const cameraState = {
+    ...getCameraForViewport().initial,
+    texture: 'texture-1.jpg'
+};
+
+function updateCameraFromState() {
+    camera.position.x = Math.cos(cameraState.rotation) * cameraState.zoom;
+    camera.position.z = Math.sin(cameraState.rotation) * cameraState.zoom;
+    camera.position.y = cameraState.elevation;
+    camera.lookAt(cameraState.lookAtX, cameraState.lookAtY, 0);
+
+    // Handle texture changes
+    if (model && cameraState.texture !== currentTextureName) {
+        currentTextureName = cameraState.texture;
+        applyTextureToMaterials(model, cameraState.texture);
     }
 }
 
-// Initialize quote words - wrap each word in a span for individual animation
-function initQuoteWords() {
+// ============================================================================
+// HERO CONTENT ANIMATIONS
+// Header and initial content fade out
+// ============================================================================
+
+function initHeroContent() {
+    // Hero header fades out
+    gsap.fromTo('#hero-header',
+        { opacity: 1, y: 0 },
+        {
+            opacity: 0,
+            y: -50,
+            ease: 'none',
+            scrollTrigger: {
+                trigger: '.hero-section',
+                start: 'top top',
+                end: '8% top',
+                scrub: true
+            }
+        }
+    );
+
+    // Hero content fades out
+    gsap.fromTo('#hero-content',
+        { opacity: 1, y: 0 },
+        {
+            opacity: 0,
+            y: 50,
+            ease: 'none',
+            scrollTrigger: {
+                trigger: '.hero-section',
+                start: 'top top',
+                end: '5% top',
+                scrub: true
+            }
+        }
+    );
+}
+
+// ============================================================================
+// MESSAGE 1 ANIMATIONS
+// Texture: texture-1.jpg → texture-2.jpg
+// Gradient: Purple (stays)
+// ============================================================================
+
+function initMessage1() {
+    const trigger = '#message-1';
+    const message = '#message-1 .hero-message';
+
+    // Initial state
+    gsap.set(message, { opacity: 0, y: 50, visibility: 'visible' });
+
+    // Texture change
+    ScrollTrigger.create({
+        trigger,
+        start: 'top 80%',
+        onEnter: () => transitionToTexture('texture-2.jpg', 0.5),
+        onLeaveBack: () => transitionToTexture('texture-1.jpg', 0.5)
+    });
+
+    // Camera animation: initial → message1
+    gsap.fromTo(cameraState,
+        { ...CAM.initial },
+        {
+            ...CAM.message1,
+            ease: 'none',
+            immediateRender: false,
+            scrollTrigger: {
+                trigger,
+                start: 'top 65%',
+                end: 'top 20%',
+                scrub: true,
+                onUpdate: updateCameraFromState
+            }
+        }
+    );
+
+    // Message fade in
+    gsap.fromTo(message,
+        { opacity: 0, y: 50 },
+        {
+            opacity: 1,
+            y: 0,
+            ease: 'none',
+            scrollTrigger: {
+                trigger,
+                start: 'top 80%',
+                end: 'top 40%',
+                scrub: true
+            }
+        }
+    );
+
+    // Message fade out
+    gsap.to(message, {
+        opacity: 0,
+        y: -50,
+        ease: 'none',
+        immediateRender: false,
+        scrollTrigger: {
+            trigger,
+            start: 'bottom 60%',
+            end: 'bottom 20%',
+            scrub: true
+        }
+    });
+}
+
+// ============================================================================
+// MESSAGE 2 ANIMATIONS
+// Texture: texture-2.jpg → texture-3.jpg
+// Gradient: Purple → Teal
+// ============================================================================
+
+function initMessage2() {
+    const trigger = '#message-2';
+    const message = '#message-2 .hero-message';
+    const gradient = document.querySelector('.hero-gradient-teal');
+
+    // Initial state
+    gsap.set(message, { opacity: 0, y: 50, visibility: 'visible' });
+
+    // Texture change
+    ScrollTrigger.create({
+        trigger,
+        start: 'top 60%',
+        onEnter: () => transitionToTexture('texture-3.jpg', 0.5),
+        onLeaveBack: () => transitionToTexture('texture-2.jpg', 0.5)
+    });
+
+    // Camera animation: message1 → message2
+    gsap.fromTo(cameraState,
+        { ...CAM.message1 },
+        {
+            ...CAM.message2,
+            ease: 'none',
+            immediateRender: false,
+            scrollTrigger: {
+                trigger,
+                start: 'top 80%',
+                end: 'top 20%',
+                scrub: true,
+                onUpdate: updateCameraFromState
+            }
+        }
+    );
+
+    // Gradient: Teal fades in
+    if (gradient) {
+        gsap.to(gradient, {
+            opacity: 1,
+            ease: 'none',
+            scrollTrigger: {
+                trigger,
+                start: 'top 70%',
+                end: 'top 30%',
+                scrub: true
+            }
+        });
+    }
+
+    // Message fade in
+    gsap.fromTo(message,
+        { opacity: 0, y: 50 },
+        {
+            opacity: 1,
+            y: 0,
+            ease: 'none',
+            scrollTrigger: {
+                trigger,
+                start: 'top 80%',
+                end: 'top 40%',
+                scrub: true
+            }
+        }
+    );
+
+    // Message fade out
+    gsap.to(message, {
+        opacity: 0,
+        y: -30,
+        ease: 'none',
+        immediateRender: false,
+        scrollTrigger: {
+            trigger,
+            start: 'bottom 60%',
+            end: 'bottom 20%',
+            scrub: true
+        }
+    });
+}
+
+// ============================================================================
+// MESSAGE 3 ANIMATIONS
+// Texture: texture-3.jpg → texture-4.jpg
+// Gradient: Teal (stays)
+// ============================================================================
+
+function initMessage3() {
+    const trigger = '#message-3';
+    const message = '#message-3 .hero-message';
+
+    // Initial state
+    gsap.set(message, { opacity: 0, y: 50, visibility: 'visible' });
+
+    // Texture change
+    ScrollTrigger.create({
+        trigger,
+        start: 'top 60%',
+        onEnter: () => transitionToTexture('texture-4.jpg', 0.5),
+        onLeaveBack: () => transitionToTexture('texture-3.jpg', 0.5)
+    });
+
+    // Camera animation: message2 → message3
+    gsap.fromTo(cameraState,
+        { ...CAM.message2 },
+        {
+            ...CAM.message3,
+            ease: 'none',
+            immediateRender: false,
+            scrollTrigger: {
+                trigger,
+                start: 'top 80%',
+                end: 'top 20%',
+                scrub: true,
+                onUpdate: updateCameraFromState
+            }
+        }
+    );
+
+    // Message fade in
+    gsap.fromTo(message,
+        { opacity: 0, y: 50 },
+        {
+            opacity: 1,
+            y: 0,
+            ease: 'none',
+            scrollTrigger: {
+                trigger,
+                start: 'top 80%',
+                end: 'top 40%',
+                scrub: true
+            }
+        }
+    );
+
+    // Message fade out
+    gsap.to(message, {
+        opacity: 0,
+        y: -30,
+        ease: 'none',
+        immediateRender: false,
+        scrollTrigger: {
+            trigger,
+            start: 'bottom 60%',
+            end: 'bottom 20%',
+            scrub: true
+        }
+    });
+}
+
+// ============================================================================
+// MESSAGE 4 ANIMATIONS
+// Texture: texture-4.jpg → texture-5.jpg
+// Gradient: Teal → Purple
+// ============================================================================
+
+function initMessage4() {
+    const trigger = '#message-4';
+    const message = '#message-4 .hero-message';
+    const gradient = document.querySelector('.hero-gradient-teal');
+
+    // Initial state
+    gsap.set(message, { opacity: 0, y: 50, visibility: 'visible' });
+
+    // Texture change
+    ScrollTrigger.create({
+        trigger,
+        start: 'top 60%',
+        onEnter: () => transitionToTexture('texture-5.jpg', 0.5),
+        onLeaveBack: () => transitionToTexture('texture-4.jpg', 0.5)
+    });
+
+    // Camera animation: message3 → message4
+    gsap.fromTo(cameraState,
+        { ...CAM.message3 },
+        {
+            ...CAM.message4,
+            ease: 'none',
+            immediateRender: false,
+            scrollTrigger: {
+                trigger,
+                start: 'top 80%',
+                end: 'top 20%',
+                scrub: true,
+                onUpdate: updateCameraFromState
+            }
+        }
+    );
+
+    // Gradient: Teal fades out (back to purple)
+    if (gradient) {
+        gsap.to(gradient, {
+            opacity: 0,
+            ease: 'none',
+            scrollTrigger: {
+                trigger,
+                start: 'top 70%',
+                end: 'top 30%',
+                scrub: true
+            }
+        });
+    }
+
+    // Message fade in (stays visible - no fade out)
+    gsap.fromTo(message,
+        { opacity: 0, y: 50 },
+        {
+            opacity: 1,
+            y: 0,
+            ease: 'none',
+            scrollTrigger: {
+                trigger,
+                start: 'top 80%',
+                end: 'top 40%',
+                scrub: true
+            }
+        }
+    );
+}
+
+// ============================================================================
+// HERO ANIMATIONS ORCHESTRATOR
+// Initializes all hero section animations
+// ============================================================================
+
+function initHeroAnimations() {
+    // Get camera keyframes for current viewport
+    CAM = getCameraForViewport();
+    
+    // Set initial camera state and apply immediately
+    Object.assign(cameraState, CAM.initial);
+    updateCameraFromState();
+    
+    // Set initial gradient state
+    const tealGradient = document.querySelector('.hero-gradient-teal');
+    if (tealGradient) {
+        gsap.set(tealGradient, { opacity: 0 });
+    }
+
+    // Initialize all animations
+    initHeroContent();
+    initMessage1();
+    initMessage2();
+    initMessage3();
+    initMessage4();
+}
+
+function initHeroFreezing() {
+    // Use GSAP's native pin feature instead of manual CSS manipulation
+    ScrollTrigger.create({
+        trigger: '.hero-section',
+        start: 'bottom bottom',
+        endTrigger: '#aum-section',
+        end: 'top top',
+        pin: true,
+        pinSpacing: false
+    });
+
+    // Fade out the 3D model only when AUM section covers the viewport
+    // The model is position:fixed, so it stays in place - we fade it as next section comes in
+    gsap.to('.model-section', {
+        // opacity: 0,
+        ease: 'none',
+        scrollTrigger: {
+            trigger: '#aum-section',
+            start: 'top bottom',         // When AUM section enters viewport
+            end: 'top 70%',              // Quickly fade out
+            scrub: true
+        }
+    });
+}
+
+function initScaleAnimations() {
+    // AUM section - scales down as it enters viewport
+
+    gsap.fromTo('#aum-text',
+        {
+            y: -100
+        },
+        {
+            y: 0,
+            ease: 'none',
+            scrollTrigger: {
+                trigger: '#aum-section',
+                start: 'top bottom',     // When section top hits viewport bottom
+                end: 'top top',          // When section top is 20% down viewport
+                scrub: true
+            }
+        }
+    );
+
+    gsap.fromTo('#aum-video',
+        {
+            y: -100
+        },
+        {
+            y: 0,
+            ease: 'none',
+            scrollTrigger: {
+                trigger: '#aum-section',
+                start: 'top bottom',     // When section top hits viewport bottom
+                end: 'top 20%',          // When section top is 20% down viewport
+                scrub: true
+            }
+        }
+    );
+
+    gsap.fromTo('#aum-text',
+        {
+            y: 0
+        },
+        {
+            y: 300,
+            ease: 'none',
+            scrollTrigger: {
+                trigger: '#aum-section',
+                start: 'top top',     // When section top hits viewport bottom
+                end: 'bottom top',          // When section top is 20% down viewport
+                scrub: true
+            }
+        }
+    );
+
+    gsap.fromTo('#aum-video',
+        {
+            y: 0
+        },
+        {
+            y: 300,
+            ease: 'none',
+            scrollTrigger: {
+                trigger: '#aum-section',
+                start: 'top top',     // When section top hits viewport bottom
+                end: 'bottom top',          // When section top is 20% down viewport
+                scrub: true
+            }
+        }
+    );
+}
+
+function initLogoScroll() {
+    gsap.fromTo('#logo-scroll-container',
+        { x: 0 },
+        {
+            x: -500,
+            ease: 'none',
+            scrollTrigger: {
+                trigger: '#logo-scroll-container',
+                start: 'top bottom',
+                end: 'bottom top',
+                scrub: true
+            }
+        });
+}
+
+function initStickyImageSection() {
+    const stickyImage = document.getElementById('sticky-section-image');
+    const messageTriggers = document.querySelectorAll('.message-trigger');
+
+    if (!stickyImage || messageTriggers.length === 0) return;
+
+    messageTriggers.forEach((trigger) => {
+        const imageSrc = trigger.getAttribute('data-image');
+
+        ScrollTrigger.create({
+            trigger: trigger,
+            start: 'top center',
+            end: 'bottom center',
+            onEnter: () => {
+                if (imageSrc) stickyImage.src = imageSrc;
+            },
+            onEnterBack: () => {
+                if (imageSrc) stickyImage.src = imageSrc;
+            }
+        });
+    });
+}
+
+function initQuoteAnimation() {
     const quoteElement = document.getElementById('quote');
     if (!quoteElement) return;
-    
+
     // Check if already initialized
     if (quoteElement.querySelector('.quote-word')) return;
-    
-    // Get the text content (this will convert &nbsp; to regular spaces)
+
     const text = quoteElement.textContent;
-    
-    // Split text into words and spaces, preserving whitespace
     const parts = text.split(/(\s+)/);
-    
-    // Clear and rebuild with wrapped words
+
     quoteElement.innerHTML = '';
+    const wordSpans = [];
+
     parts.forEach(part => {
         if (part.trim().length === 0) {
-            // Preserve spaces (including multiple spaces and line breaks)
             quoteElement.appendChild(document.createTextNode(part));
         } else {
-            // Wrap word in span
             const span = document.createElement('span');
             span.className = 'quote-word';
             span.textContent = part;
-            span.style.color = 'rgb(148, 163, 184)'; // Initial gray color (slate-400)
-            span.style.transition = 'color 0.4s ease-out'; // Smooth transition
+            span.style.color = 'rgb(148, 163, 184)'; // Initial gray (slate-400)
+            span.style.transition = 'color 0.4s ease-out';
             quoteElement.appendChild(span);
+            wordSpans.push(span);
         }
     });
-}
 
-// Update quote color based on scroll progress - word by word
-function updateQuoteColor() {
-    const quoteElement = document.getElementById('quote');
-    if (!quoteElement) return;
-    
-    // Find the parent section element
+    // Animate words one by one based on scroll
     const parentSection = quoteElement.closest('section');
-    if (!parentSection) return;
-    
-    // Calculate scroll progress for the parent section
-    // 0 = section enters viewport (top reaches bottom of viewport)
-    // 1 = section bottom reaches bottom of viewport
-    const progress = getElementScrollProgress(parentSection);
-    
-    // Get all word spans
-    const wordSpans = quoteElement.querySelectorAll('.quote-word');
-    if (wordSpans.length === 0) return;
-    
-    // Color values
-    // slate-400: rgb(148, 163, 184) - gray
-    // slate-900: rgb(15, 23, 42) - black
-    const startR = 148;
-    const startG = 163;
-    const startB = 184;
-    const endR = 15;
-    const endG = 23;
-    const endB = 42;
-    
-    // Each word transitions over a portion of the scroll progress
-    // Adjust this value to control how quickly words transition (smaller = faster, more overlap)
-    const transitionDuration = 0.1; // Each word takes 10% of scroll progress to transition
-    
-    // Animate each word with staggered timing
-    wordSpans.forEach((span, index) => {
-        // Distribute words evenly across the scroll progress
-        // First word starts at 0, last word finishes at 1
-        const wordStart = (index / wordSpans.length) * (1 - transitionDuration);
-        const wordEnd = wordStart + transitionDuration;
-        
-        // Binary state: either gray (0) or black (1)
-        // CSS transition will handle the smooth animation between states
-        let wordProgress = 0;
-        if (progress >= wordStart) {
-            // Word should be black (transition will animate smoothly)
-            wordProgress = 1;
-        }
-        // else wordProgress stays 0 (gray)
-        
-        // Apply binary color - either gray or black
-        if (wordProgress === 1) {
-            span.style.color = `rgb(${endR}, ${endG}, ${endB})`; // Black
-        } else {
-            span.style.color = `rgb(${startR}, ${startG}, ${startB})`; // Gray
-        }
-    });
-    
-    quoteElement.style.willChange = 'contents'; // Hardware acceleration hint
+    if (parentSection && wordSpans.length > 0) {
+        wordSpans.forEach((span, index) => {
+            // Each word triggers at a specific scroll position
+            const progress = index / wordSpans.length;
+            const startPercent = progress * 60 + 30; // Spread from 10% to 70%
+
+            ScrollTrigger.create({
+                trigger: parentSection,
+                start: `top+=${startPercent}% bottom`,
+                onEnter: () => {
+                    span.style.color = 'rgb(15, 23, 42)'; // Black (slate-900)
+                },
+                onLeaveBack: () => {
+                    span.style.color = 'rgb(148, 163, 184)'; // Gray (slate-400)
+                }
+            });
+        });
+    }
 }
 
-// Update scroll position from Lenis and trigger camera update
-lenis.on('scroll', ({ scroll, limit, velocity, direction, progress }) => {
-    currentScrollY = scroll;
-    updateCamera();
-    updateLogoScroll();
-    updateStickyImage();
-    updateQuoteColor();
+// ============================================================================
+// INITIALIZATION
+// ============================================================================
+
+function init() {
+    // Clear any cached scroll calculations from previous sessions
+    ScrollTrigger.clearScrollMemory();
+
+    // Reset scroll position again to ensure clean state
+    window.scrollTo(0, 0);
+    lenis.scrollTo(0, { immediate: true });
+
+    // Small delay to ensure DOM has fully reflowed after scroll reset
+    requestAnimationFrame(() => {
+        initHeroAnimations();  // Per-message ScrollTriggers for camera, messages, gradients
+        initScaleAnimations();
+        initHeroFreezing();
+        initLogoScroll();
+        initStickyImageSection();
+        initQuoteAnimation();
+
+        // Force ScrollTrigger to recalculate after all animations are set up
+        ScrollTrigger.refresh(true);
+    });
+}
+
+// Wait for full page load (images, fonts, etc.) before initializing ScrollTrigger
+// This ensures accurate measurements for pinning and scroll calculations
+window.addEventListener('load', () => {
+    // Additional small delay to ensure everything is painted
+    setTimeout(init, 100);
 });
 
-// Animation loop - integrate Lenis RAF
-function animate(time) {
-    requestAnimationFrame(animate);
-    
-    // Update Lenis (handles smooth scrolling)
-    lenis.raf(time);
+// ============================================================================
+// RESIZE HANDLING
+// ============================================================================
 
+let resizeTimeout;
+let lastBreakpoint = null;
+
+/**
+ * Get the current breakpoint based on viewport width
+ */
+function getCurrentBreakpoint() {
+    const width = window.innerWidth;
+    const breakpoints = Object.keys(CAMERA_BREAKPOINTS)
+        .map(Number)
+        .sort((a, b) => a - b);
+
+    for (const bp of breakpoints) {
+        if (width <= bp) {
+            return bp;
+        }
+    }
+    return breakpoints[breakpoints.length - 1];
+}
+
+function onWindowResize() {
+    // Debounce resize to prevent rapid recalculations
+    clearTimeout(resizeTimeout);
+
+    resizeTimeout = setTimeout(() => {
+        // Use viewport dimensions directly - container dimensions can be
+        // corrupted by ScrollTrigger pin calculations
+        width = window.innerWidth;
+        height = window.innerHeight;
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        renderer.setSize(width, height);
+
+        // Check if breakpoint changed
+        const currentBreakpoint = getCurrentBreakpoint();
+        const breakpointChanged = lastBreakpoint !== null && lastBreakpoint !== currentBreakpoint;
+        lastBreakpoint = currentBreakpoint;
+
+        if (breakpointChanged) {
+            // Breakpoint changed - reinitialize hero animations with new keyframes
+            // Kill all hero-related ScrollTriggers to prevent duplicates
+            const heroTriggers = ['.hero-section', '#message-1', '#message-2', '#message-3', '#message-4'];
+            ScrollTrigger.getAll().forEach(st => {
+                const trigger = st.vars.trigger;
+                if (heroTriggers.some(sel => 
+                    trigger === sel || 
+                    trigger === document.querySelector(sel) ||
+                    (typeof trigger === 'string' && trigger.includes('message'))
+                )) {
+                    st.kill();
+                }
+            });
+
+            // Reinitialize with new keyframes
+            initHeroAnimations();
+        }
+
+        // Force complete ScrollTrigger recalculation
+        ScrollTrigger.refresh(true);
+    }, 150);
+}
+
+// Initialize lastBreakpoint
+lastBreakpoint = getCurrentBreakpoint();
+
+window.addEventListener('resize', onWindowResize);
+
+// ============================================================================
+// ANIMATION LOOP
+// ============================================================================
+
+function animate() {
+    requestAnimationFrame(animate);
+    updateCameraFromState();
     renderer.render(scene, camera);
 }
 
 animate();
-updateCamera(); // Initial camera position
-updateLogoScroll(); // Initial logo position
-updateStickyImage(); // Initial sticky image
-updateQuoteColor(); // Initial quote color
