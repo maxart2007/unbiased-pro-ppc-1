@@ -33,8 +33,30 @@
 
 @layer components {
   .hero-section {
-    background: linear-gradient(235deg, #982B7B 0%, #2E3373 119.43%);
     position: relative; /* Needed for absolute positioning of model-section */
+  }
+
+  /* Gradient overlays for smooth background transitions */
+  .hero-gradient {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .hero-gradient-purple {
+    background: linear-gradient(235deg, #982B7B 0%, #2E3373 119.43%);
+  }
+
+  .hero-gradient-teal {
+    background: linear-gradient(85deg, #016469 0%, #007B81 46.84%, #02666B 99.47%);
+    opacity: 0; /* Hidden by default, GSAP will animate this */
+  }
+
+  /* Ensure hero content appears above gradient overlays */
+  .hero-section > *:not(.hero-gradient) {
+    position: relative;
+    z-index: 1;
   }
   
   /* Ensure subsequent sections appear above frozen hero section */
@@ -83,6 +105,7 @@
     flex-direction: row;
     align-items: center;
   }
+
 }
 
 @layer utilities {

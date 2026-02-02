@@ -13,8 +13,11 @@
 
 <body>
     <section class="hero-section relative min-h-[200vh] flex flex-col">
+        <!-- Gradient overlays for smooth transitions -->
+        <div class="hero-gradient hero-gradient-purple"></div>
+        <div class="hero-gradient hero-gradient-teal"></div>
         <!-- Header -->
-        <div class="w-full lg:container lg:mx-auto px-6 lg:px-12" id="hero-header">
+        <div class="xl:container xl:mx-auto px-6 xl:px-12" id="hero-header">
             <div class="w-full py-8 flex flex-row justify-between">
                 <img src="img/ub_logo.svg" alt="Logo" class="h-8 object-contain">
                 <!-- <div class="flex flex-row gap-4">
@@ -25,14 +28,14 @@
         </div>
 
         <!-- Hero Content -->
-        <div class="lg:container mx-auto min-h-[60vh] px-6 lg:px-12" id="hero-content">
+        <div class="xl:container xl:mx-auto min-h-[60vh] px-6 xl:px-12" id="hero-content">
             <div class="w-100 pt-0 pb-12">
                 <div class="flex flex-col md:flex-row md:gap-12">
                     <h1
-                        class="w-full mb-4 md:mb-0 md:w-2/3 text-4xl md:text-4xl xl:text-6xl font-black text-white drop-shadow-[2px_2px_4px_rgba(0,0,0,0.3)] pt-12">
+                        class="w-full mb-4 md:mb-0 md:w-3/5 text-4xl sm:text-5xl xl:text-6xl font-black text-white drop-shadow-[2px_2px_4px_rgba(0,0,0,0.3)] pt-12">
                         Connecting Financial Advisors with the clients they want</h1>
-                    <div class="w-full md:w-1/3 flex flex-col md:pt-14">
-                        <p class="text-base md:text-xl text-white/90 leading-relaxed mb-4">
+                    <div class="w-full md:w-2/5 flex flex-col md:pt-14">
+                        <p class="text-lg sm:text-xl text-white/90 leading-relaxed mb-4">
                             Exclusive leads straight to your inbox. When your ideal client fills out our form, you're
                             immediately matched. Get access to&nbsp;your new pipeline now.
                         </p>
@@ -46,9 +49,9 @@
         </div>
 
         <!-- Message 1 -->
-        <div class="lg:container mx-auto min-h-[100vh] py-12 px-6 lg:px-12" id="message-1">
-            <div class="w-full md:w-1/3 hero-message">
-                <div class="flex flex-col gap-4">
+        <div class="xl:container xl:mx-auto min-h-[100vh] py-12 px-6 xl:px-12" id="message-1">
+            <div class="w-full md:w-1/3 hero-message flex flex-col items-center">
+                <div class="flex flex-col gap-4 pe-12">
                     <div class="svg-container">
                         <svg width="48" height="48" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <rect width="64" height="64" rx="8" fill="#5CDFB0" />
@@ -70,8 +73,8 @@
         </div>
 
         <!-- Message 2 -->
-        <div class="lg:container mx-auto min-h-[100vh] py-12 px-6 lg:px-12" id="message-2">
-            <div class="w-full lg:w-1/3 lg:ml-[66%] hero-message">
+        <div class="xl:container xl:mx-auto min-h-[100vh] py-12 px-6 xl:px-12" id="message-2">
+            <div class="w-full lg:w-1/3 lg:ml-[66%] hero-message flex flex-col items-center">
                 <div class="flex flex-col gap-4">
                     <div class="svg-container">
                         <svg width="48" height="48" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -93,7 +96,7 @@
 
         <!-- Message 3 -->
         <div class="lg:container mx-auto min-h-[100vh] py-12 px-6 lg:px-12" id="message-3">
-            <div class="w-full md:w-1/3 hero-message">
+            <div class="w-full md:w-1/3 hero-message flex flex-col items-center">
                 <div class="flex flex-col gap-4">
                     <div class="svg-container">
                         <svg width="48" height="48" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -117,9 +120,9 @@
 
         <!-- Final CTA -->
         <div class="lg:container mx-auto py-32 min-h-[100vh] px-6 lg:px-12" id="message-4">
-            <div class="w-full md:w-1/2 hero-message flex flex-col justify-start">
+            <div class="w-full md:w-2/5 hero-message flex flex-col justify-start">
                 <div class="flex flex-col gap-4">
-                    <p class="text-5xl font-black font-galano text-white">Connecting you with exclusive leads now</p>
+                    <p class="text-4xl font-black font-galano text-white">Connecting you with exclusive leads now</p>
                     <p class="text-xl text-white pr-12 leading-relaxed">Unbiased connects financial advisory firms
                         nationwide to the
                         customers they want. Choose the type of clients you want then connect, onboard and scale faster.
@@ -137,10 +140,10 @@
     <!-- Spacer to maintain scroll position when hero section is frozen -->
     <div id="hero-section-spacer" style="display: none;"></div>
 
-    <section class="bg-slate-900 h-[100vh]" id="aum-section">
+    <section class="bg-slate-900 min-h-[100vh]" id="aum-section">
         <div class="w-full origin-top" id="aum-content">
-            <div class="container mx-auto py-32 flex-row gap-12">
-                <div class="flex flex-col gap-4 w-1/3" id="aum-text">
+            <div class="xl:container xl:mx-auto py-32 px-6 lg:px-12 flex md:flex-row flex-col gap-12">
+                <div class="flex flex-col gap-4 w-full md:w-2/5" id="aum-text">
                     <h2 class="text-6xl font-bold text-white mb-2">Unlock more AUM</h2>
                     <p class="text-lg mx-auto text-white mb-4">Instantly match with people looking for
                         financial advice. You select your ideal client profile, we match you with them.</p>
@@ -150,7 +153,7 @@
                     </a>
                 </div>
                 <!-- video goes here -->
-                <video class="w-2/3 h-auto" controls id="aum-video">
+                <video class="w-full md:w-3/5 h-auto" controls id="aum-video">
                     <source src="videos/aum.mp4" type="video/mp4" />
                 </video>
             </div>
@@ -159,7 +162,7 @@
 
     <section class="bg-slate-200 z-50 relative">
         <div class="w-full origin-top">
-            <div class="container mx-auto py-32 flex-col">
+            <div class="xl:container xl:mx-auto py-32 px-6 xl:px-12 flex-col">
                 <p class="text-4xl lg:text-6xl font-galano hanging-indent" id="quote">"In under four months, I have already seen
                     a&nbsp;36% conversion rate, and this is
                     rapidly increasing as those larger leads with longer conversion timescales come to fruition."</p>
@@ -211,25 +214,14 @@
                         <img src="img/marketwatch.svg" alt="Marketwatch" class="h-6 object-contain">
                         <img src="img/yahoo.svg" alt="Yahoo" class="h-7 object-contain">
                     </div>
-                    <div class="logo-set flex flex-row gap-12 md:gap-24 items-center flex-shrink-0">
-                        <img src="img/kiplinger.svg" alt="Kiplinger" class="h-7 object-contain">
-                        <img src="img/good_housekeeping.svg" alt="Good Housekeeping" class="h-8 object-contain">
-                        <img src="img/marketwatch.svg" alt="Marketwatch" class="h-6 object-contain">
-                        <img src="img/yahoo.svg" alt="Yahoo" class="h-7 object-contain">
-                    </div>
-                    <div class="logo-set flex flex-row gap-12 md:gap-24 items-center flex-shrink-0">
-                        <img src="img/kiplinger.svg" alt="Kiplinger" class="h-7 object-contain">
-                        <img src="img/good_housekeeping.svg" alt="Good Housekeeping" class="h-8 object-contain">
-                        <img src="img/marketwatch.svg" alt="Marketwatch" class="h-6 object-contain">
-                        <img src="img/yahoo.svg" alt="Yahoo" class="h-7 object-contain">
-                    </div>
+                    
                 </div>
             </div>
         </div>
     </section>
 
     <section id="sticky-image-section" class="bg-slate-200 relative pt-24">
-        <div class="container mx-auto flex flex-row">
+        <div class="xl:container xl:mx-auto flex flex-row px-6 xl:px-12">
             <!-- Left column: Sticky image -->
             <div class="w-1/2 sticky top-0 h-screen flex items-center justify-center">
                 <div class="h-[80vh] w-full flex items-center justify-start overflow-hidden">
@@ -271,18 +263,15 @@
     </section>
 
 
-    <!-- Debug panel -->
-    <div id="debug-panel"
-        class="hidden fixed top-4 right-4 bg-black/80 text-white px-4 py-2 rounded-lg font-mono text-xs z-50 pointer-events-none max-w-xs">
-        <div class="mb-2 font-bold text-sm">Debug Info</div>
-        <div>Scroll: <span id="scroll-percent">0.00</span>%</div>
-        <div>Rotation: <span id="debug-rotation">0.00</span> rad</div>
-        <div>Zoom: <span id="debug-zoom">0.00</span></div>
-        <div>Z (elevation): <span id="debug-z">0.00</span></div>
-        <div>lookAtX: <span id="debug-lookatx">0.00</span></div>
-        <div>lookAtY: <span id="debug-lookaty">0.00</span></div>
-        <div>Texture: <span id="debug-texture">-</span></div>
+    <div id="breakpoint-debug" class="fixed bottom-4 left-4 z-[9999] px-3 py-1.5 rounded-full text-xs font-mono font-bold shadow-lg">
+        <span class="block sm:hidden bg-red-500 text-white px-2 py-1 rounded">base (&lt;576px)</span>
+        <span class="hidden sm:block md:hidden bg-orange-500 text-white px-2 py-1 rounded">sm (≥576px)</span>
+        <span class="hidden md:block lg:hidden bg-yellow-500 text-black px-2 py-1 rounded">md (≥768px)</span>
+        <span class="hidden lg:block xl:hidden bg-green-500 text-white px-2 py-1 rounded">lg (≥1024px)</span>
+        <span class="hidden xl:block 2xl:hidden bg-blue-500 text-white px-2 py-1 rounded">xl (≥1344px)</span>
+        <span class="hidden 2xl:block bg-purple-500 text-white px-2 py-1 rounded">2xl (≥1536px)</span>
     </div>
+
 
     <script type="module" src="/src/main.js"></script>
 </body>

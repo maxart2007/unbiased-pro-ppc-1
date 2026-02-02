@@ -9,6 +9,27 @@ import './style.css';
 gsap.registerPlugin(ScrollTrigger);
 
 // ============================================================================
+// IMMEDIATE MESSAGE HIDING - Run before page fully loads
+// ============================================================================
+// Use GSAP to set opacity to 0 immediately when DOM is ready
+function hideMessagesWithGSAP() {
+    const messages = ['#message-1 .hero-message', '#message-2 .hero-message', '#message-3 .hero-message', '#message-4 .hero-message'];
+    gsap.set(messages, {
+        opacity: 0,
+        y: 100,
+        visibility: 'visible', // Ensure visible so GSAP can control opacity
+        immediateRender: true // Apply immediately, don't wait for animation
+    });
+}
+
+// Run immediately if DOM is ready, otherwise wait for DOMContentLoaded
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', hideMessagesWithGSAP);
+} else {
+    hideMessagesWithGSAP();
+}
+
+// ============================================================================
 // SCROLL RESTORATION PREVENTION
 // Prevents browser from restoring scroll position on reload, which causes
 // ScrollTrigger initialization issues (gaps, visual glitches)
@@ -64,15 +85,70 @@ const textureFiles = ['texture-1.jpg', 'texture-2.jpg', 'texture-3.jpg', 'textur
 let texturesLoaded = 0;
 let currentTextureName = null;
 
+// Cross-fade shader material for smooth texture transitions
+let screenMaterial = null;
+let isTransitioning = false;
+
+// Simple cross-fade shader (no Three.js includes to avoid conflicts)
+const crossFadeVertexShader = `
+    varying vec2 vUv;
+    void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+`;
+
+const crossFadeFragmentShader = `
+    uniform sampler2D map1;
+    uniform sampler2D map2;
+    uniform float mixFactor;
+    varying vec2 vUv;
+    
+    void main() {
+        // Only flip Y axis
+        vec2 flippedUv = vec2(vUv.x, 1.0 - vUv.y);
+        
+        vec4 color1 = texture2D(map1, flippedUv);
+        vec4 color2 = texture2D(map2, flippedUv);
+        
+        // Blend colors and force alpha to 1.0 (fully opaque)
+        vec3 finalColor = mix(color1.rgb, color2.rgb, mixFactor);
+        gl_FragColor = vec4(finalColor, 1.0);
+    }
+`;
+
+function createScreenMaterial(texture) {
+    const material = new THREE.ShaderMaterial({
+        uniforms: {
+            map1: { value: texture },
+            map2: { value: texture },
+            mixFactor: { value: 0.0 }
+        },
+        vertexShader: crossFadeVertexShader,
+        fragmentShader: crossFadeFragmentShader,
+        transparent: false,
+        depthWrite: true,
+        depthTest: true,
+        side: THREE.DoubleSide,
+        toneMapped: false  // Bypass Three.js color processing
+    });
+    material._isScreenMaterial = true;
+    return material;
+}
+
 textureFiles.forEach((filename) => {
     const texture = textureLoader.load(
         `/laptop.fbm/${filename}`,
         (loadedTexture) => {
             loadedTexture.flipY = false;
-            loadedTexture.colorSpace = THREE.SRGBColorSpace;
+            loadedTexture.colorSpace = THREE.NoColorSpace;  // Pass colors through exactly as-is
+            loadedTexture.needsUpdate = true;
             texturesLoaded++;
+            console.log(`Texture loaded: ${filename} (${texturesLoaded}/${textureFiles.length})`);
 
+            // Apply first texture when it loads and model is ready
             if (model && texturesLoaded === 1) {
+                console.log('Model ready, applying first texture:', filename);
                 applyTextureToMaterials(model, filename);
                 currentTextureName = filename;
             }
@@ -83,10 +159,19 @@ textureFiles.forEach((filename) => {
     textures[filename] = texture;
 });
 
+// Store reference to the screen mesh for direct texture application
+let screenMesh = null;
+
 function applyTextureToMaterials(object, textureName) {
-    if (!textures[textureName]) return;
+    if (!textures[textureName]) {
+        console.warn('Texture not found:', textureName);
+        return;
+    }
     const targetTexture = textures[textureName];
-    if (!targetTexture.image) return;
+    if (!targetTexture.image) {
+        console.warn('Texture image not loaded yet:', textureName);
+        return;
+    }
 
     object.traverse((child) => {
         if (child.isMesh && child.material) {
@@ -94,35 +179,100 @@ function applyTextureToMaterials(object, textureName) {
             materials.forEach((material, materialIndex) => {
                 if (material) {
                     const materialName = (material.name || '').toLowerCase();
-                    const isDisplayGlass = materialName === 'display glass' || material.type === 'MeshBasicMaterial';
+                    const meshName = (child.name || '').toLowerCase();
+                    
+                    // Check if this is the display/screen material using flexible matching
+                    const isDisplayGlass = materialName.includes('display') || 
+                        materialName.includes('screen') || 
+                        materialName.includes('glass') ||
+                        materialName.includes('lcd') ||
+                        meshName.includes('display') ||
+                        meshName.includes('screen') ||
+                        meshName.includes('glass') ||
+                        meshName.includes('lcd') ||
+                        material._isScreenMaterial; // Our marker
 
                     if (isDisplayGlass) {
-                        const flippedTexture = targetTexture.clone();
-                        flippedTexture.wrapS = THREE.RepeatWrapping;
-                        flippedTexture.wrapT = THREE.RepeatWrapping;
-                        flippedTexture.repeat.set(1, -1);
-                        flippedTexture.needsUpdate = true;
-
-                        if (material.type === 'MeshBasicMaterial') {
-                            material.map = flippedTexture;
-                            material.needsUpdate = true;
+                        screenMesh = child; // Store reference
+                        console.log('Applying texture to screen:', textureName);
+                        
+                        // Update existing shader material or create new one
+                        if (material._isScreenMaterial && material.uniforms) {
+                            // Instant swap - set both textures to target
+                            material.uniforms.map1.value = targetTexture;
+                            material.uniforms.map2.value = targetTexture;
+                            material.uniforms.mixFactor.value = 0.0;
                         } else {
-                            const basicMaterial = new THREE.MeshBasicMaterial({
-                                map: flippedTexture,
-                                color: 0xffffff,
-                                transparent: false,
-                                opacity: 1.0
-                            });
+                            screenMaterial = createScreenMaterial(targetTexture);
 
                             if (Array.isArray(child.material)) {
-                                child.material[materialIndex] = basicMaterial;
+                                child.material[materialIndex] = screenMaterial;
                             } else {
-                                child.material = basicMaterial;
+                                child.material = screenMaterial;
                             }
                         }
                     }
                 }
             });
+        }
+    });
+}
+
+/**
+ * Smoothly transition to a new texture using cross-fade
+ * @param {string} textureName - Name of the target texture
+ * @param {number} duration - Transition duration in seconds (default 0.4)
+ */
+function transitionToTexture(textureName, duration = 0.4) {
+    if (!textures[textureName]) return;
+    if (!textures[textureName].image) return;
+    if (!screenMaterial || !screenMaterial.uniforms) {
+        // Fallback: try to apply directly
+        if (model) applyTextureToMaterials(model, textureName);
+        return;
+    }
+    
+    const targetTexture = textures[textureName];
+    const uniforms = screenMaterial.uniforms;
+    
+    // If already showing this texture and not transitioning, skip
+    if (uniforms.map1.value === targetTexture && uniforms.mixFactor.value === 0 && !isTransitioning) {
+        return;
+    }
+    
+    // If transitioning to the same target, skip
+    if (isTransitioning && uniforms.map2.value === targetTexture) {
+        return;
+    }
+
+    // Kill any existing transition
+    gsap.killTweensOf(uniforms.mixFactor);
+
+    // If we're mid-transition, figure out current state
+    const currentMix = uniforms.mixFactor.value;
+    if (currentMix > 0.5) {
+        // More than halfway - treat map2 as current
+        uniforms.map1.value = uniforms.map2.value;
+        uniforms.mixFactor.value = 0;
+    } else if (currentMix > 0) {
+        // Less than halfway - reset to map1
+        uniforms.mixFactor.value = 0;
+    }
+
+    // Set up new transition
+    uniforms.map2.value = targetTexture;
+    isTransitioning = true;
+
+    gsap.to(uniforms.mixFactor, {
+        value: 1.0,
+        duration: duration,
+        ease: 'power2.inOut',
+        onComplete: () => {
+            // Swap textures so map1 is the current texture
+            uniforms.map1.value = targetTexture;
+            uniforms.map2.value = targetTexture;
+            uniforms.mixFactor.value = 0;
+            isTransitioning = false;
         }
     });
 }
@@ -147,8 +297,69 @@ loader.load(
     (object) => {
         model = object;
 
+        // Debug: Log all mesh and material names to find the screen
+        console.log('=== FBX Model Structure ===');
+        object.traverse((child) => {
+            if (child.isMesh) {
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                console.log(`Mesh: "${child.name}"`, materials.map(m => `Material: "${m?.name}" (${m?.type})`));
+            }
+        });
+
+        // First, ensure the display glass material is not transparent
+        // This must happen before texture application to fix the transparent screen issue
+        object.traverse((child) => {
+            if (child.isMesh && child.material) {
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach((material, materialIndex) => {
+                    if (material) {
+                        const materialName = (material.name || '').toLowerCase();
+                        const meshName = (child.name || '').toLowerCase();
+                        
+                        // Check if this is the display/screen material by various patterns
+                        const isScreen = materialName.includes('display') || 
+                            materialName.includes('screen') || 
+                            materialName.includes('glass') ||
+                            materialName.includes('lcd') ||
+                            materialName.includes('monitor') ||
+                            meshName.includes('display') ||
+                            meshName.includes('screen') ||
+                            meshName.includes('glass') ||
+                            meshName.includes('lcd') ||
+                            meshName.includes('monitor') ||
+                            // Check if material is transparent (glass materials often are)
+                            (material.transparent === true && material.opacity < 1);
+                        
+                        if (isScreen) {
+                            console.log(`Found screen: Mesh="${child.name}", Material="${material.name}"`);
+                            screenMesh = child;
+                            
+                            // Create a base opaque material for the screen
+                            // This will be replaced by the cross-fade material when textures load
+                            const baseMaterial = new THREE.MeshBasicMaterial({
+                                color: 0x111111, // Dark gray placeholder (visible)
+                                transparent: false,
+                                opacity: 1.0,
+                                side: THREE.DoubleSide
+                            });
+                            baseMaterial.name = 'Display Glass';
+                            baseMaterial._isScreenMaterial = true;
+                            
+                            if (Array.isArray(child.material)) {
+                                child.material[materialIndex] = baseMaterial;
+                            } else {
+                                child.material = baseMaterial;
+                            }
+                        }
+                    }
+                });
+            }
+        });
+
+        // Apply texture if already loaded
         if (texturesLoaded > 0) {
-            const textureName = textures['texture-1.png'] ? 'texture-1.png' : Object.keys(textures)[0];
+            const textureName = textures['texture-1.jpg'] ? 'texture-1.jpg' : Object.keys(textures)[0];
+            console.log('Applying initial texture:', textureName);
             applyTextureToMaterials(object, textureName);
             currentTextureName = textureName;
         }
@@ -281,7 +492,7 @@ const CAMERA_KEYFRAMES_BY_BREAKPOINT = {
             elevation: 4,
             lookAtX: 0,
             lookAtY: 3,
-            texture: 'texture-1.png'
+            texture: 'texture-1.jpg'
         },
         message1: {
             rotation: Math.PI / 2,
@@ -289,7 +500,7 @@ const CAMERA_KEYFRAMES_BY_BREAKPOINT = {
             elevation: 6.5,
             lookAtX: 0,
             lookAtY: 3.5,
-            texture: 'texture-2.png'
+            texture: 'texture-2.jpg'
         },
         message2: {
             rotation: Math.PI / 2,
@@ -297,7 +508,7 @@ const CAMERA_KEYFRAMES_BY_BREAKPOINT = {
             elevation: 7,
             lookAtX: 0,
             lookAtY: 2.5,
-            texture: 'texture-3.png'
+            texture: 'texture-3.jpg'
         },
         message3: {
             rotation: Math.PI / 2,
@@ -305,7 +516,7 @@ const CAMERA_KEYFRAMES_BY_BREAKPOINT = {
             elevation: 4,
             lookAtX: 0,
             lookAtY: 2.5,
-            texture: 'texture-4.png'
+            texture: 'texture-4.jpg'
         },
         message4: {
             rotation: Math.PI / 2,
@@ -313,7 +524,7 @@ const CAMERA_KEYFRAMES_BY_BREAKPOINT = {
             elevation: 4,
             lookAtX: 0,
             lookAtY: 3,
-            texture: 'texture-5.png'
+            texture: 'texture-5.jpg'
         }
     },
 
@@ -324,7 +535,7 @@ const CAMERA_KEYFRAMES_BY_BREAKPOINT = {
             elevation: 4,
             lookAtX: 0,
             lookAtY: 3,
-            texture: 'texture-1.png'
+            texture: 'texture-1.jpg'
         },
         message1: {
             rotation: Math.PI / 2 - 0.4,
@@ -332,7 +543,7 @@ const CAMERA_KEYFRAMES_BY_BREAKPOINT = {
             elevation: 2.5,
             lookAtX: -2,
             lookAtY: 0.5,
-            texture: 'texture-2.png'
+            texture: 'texture-2.jpg'
         },
         message2: {
             rotation: Math.PI / 2 + 0.4,
@@ -340,7 +551,7 @@ const CAMERA_KEYFRAMES_BY_BREAKPOINT = {
             elevation: 2.5,
             lookAtX: 2,
             lookAtY: 0.5,
-            texture: 'texture-3.png'
+            texture: 'texture-3.jpg'
         },
         message3: {
             rotation: Math.PI / 2 - 0.4,
@@ -348,7 +559,7 @@ const CAMERA_KEYFRAMES_BY_BREAKPOINT = {
             elevation: 2.5,
             lookAtX: -2,
             lookAtY: 0.5,
-            texture: 'texture-4.png'
+            texture: 'texture-4.jpg'
         },
         message4: {
             rotation: Math.PI / 2 - 0.4,
@@ -356,7 +567,7 @@ const CAMERA_KEYFRAMES_BY_BREAKPOINT = {
             elevation: 2.5,
             lookAtX: -3,
             lookAtY: 0.5,
-            texture: 'texture-5.png'
+            texture: 'texture-5.jpg'
         }
     },
 
@@ -367,7 +578,7 @@ const CAMERA_KEYFRAMES_BY_BREAKPOINT = {
             elevation: 4,
             lookAtX: 0,
             lookAtY: 3,
-            texture: 'texture-1.png'
+            texture: 'texture-1.jpg'
         },
         message1: {
             rotation: Math.PI / 2 - 0.4,
@@ -375,7 +586,7 @@ const CAMERA_KEYFRAMES_BY_BREAKPOINT = {
             elevation: 2.5,
             lookAtX: -2,
             lookAtY: 0.5,
-            texture: 'texture-2.png'
+            texture: 'texture-2.jpg'
         },
         message2: {
             rotation: Math.PI / 2 + 0.4,
@@ -383,7 +594,7 @@ const CAMERA_KEYFRAMES_BY_BREAKPOINT = {
             elevation: 2.5,
             lookAtX: 2,
             lookAtY: 0.5,
-            texture: 'texture-3.png'
+            texture: 'texture-3.jpg'
         },
         message3: {
             rotation: Math.PI / 2 - 0.4,
@@ -391,7 +602,7 @@ const CAMERA_KEYFRAMES_BY_BREAKPOINT = {
             elevation: 2.5,
             lookAtX: -2,
             lookAtY: 0.5,
-            texture: 'texture-4.png'
+            texture: 'texture-4.jpg'
         },
         message4: {
             rotation: Math.PI / 2 - 0.4,
@@ -399,7 +610,7 @@ const CAMERA_KEYFRAMES_BY_BREAKPOINT = {
             elevation: 2.5,
             lookAtX: -3,
             lookAtY: 0.5,
-            texture: 'texture-5.png'
+            texture: 'texture-5.jpg'
         }
     },
 
@@ -412,7 +623,7 @@ const CAMERA_KEYFRAMES_BY_BREAKPOINT = {
             elevation: 4,
             lookAtX: 0,
             lookAtY: 3,
-            texture: 'texture-1.png'
+            texture: 'texture-1.jpg'
         },
         message1: {
             rotation: Math.PI / 2 - 0.4,
@@ -420,7 +631,7 @@ const CAMERA_KEYFRAMES_BY_BREAKPOINT = {
             elevation: 2,
             lookAtX: -1,
             lookAtY: 0.3,
-            texture: 'texture-2.png'
+            texture: 'texture-2.jpg'
         },
         message2: {
             rotation: Math.PI - 1,
@@ -428,7 +639,7 @@ const CAMERA_KEYFRAMES_BY_BREAKPOINT = {
             elevation: 2,
             lookAtX: 1,
             lookAtY: 0.3,
-            texture: 'texture-3.png'
+            texture: 'texture-3.jpg'
         },
         message3: {
             rotation: Math.PI / 2 - 0.4,
@@ -436,7 +647,7 @@ const CAMERA_KEYFRAMES_BY_BREAKPOINT = {
             elevation: 2,
             lookAtX: -1,
             lookAtY: 0.3,
-            texture: 'texture-4.png'
+            texture: 'texture-4.jpg'
         },
         message4: {
             rotation: 1.256,
@@ -444,7 +655,7 @@ const CAMERA_KEYFRAMES_BY_BREAKPOINT = {
             elevation: 2.5,
             lookAtX: -2.2,
             lookAtY: 0.66,
-            texture: 'texture-5.png'
+            texture: 'texture-5.jpg'
         }
     }
 };
@@ -479,9 +690,10 @@ let CAMERA_KEYFRAMES = getKeyframesForViewport();
 // Texture thresholds - texture changes at these scroll progress points
 const TEXTURE_THRESHOLDS = [
     { progress: 0, texture: 'texture-1.jpg' },
-    { progress: 0.1, texture: 'texture-2.jpg' },
-    { progress: 0.52, texture: 'texture-3.jpg' },
-    { progress: 0.75, texture: 'texture-4.jpg' }
+    { progress: 0.08, texture: 'texture-2.jpg' },
+    { progress: 0.32, texture: 'texture-3.jpg' },
+    { progress: 0.5, texture: 'texture-4.jpg' },
+    { progress: 0.75, texture: 'texture-5.jpg' }
 ];
 
 let lastTextureIndex = 0;
@@ -501,9 +713,9 @@ function updateTextureFromProgress(progress) {
     if (cameraState.texture !== targetTexture) {
         cameraState.texture = targetTexture;
         lastTextureIndex = textureIndex;
-        // Immediately apply texture change
+        // Apply texture change with smooth crossfade
         if (model) {
-            applyTextureToMaterials(model, targetTexture);
+            transitionToTexture(targetTexture, 0.5); // 0.5 second crossfade
             currentTextureName = targetTexture;
         }
     }
@@ -518,13 +730,9 @@ function initCameraAnimations() {
 
     // Set initial camera state explicitly
     Object.assign(cameraState, CAMERA_KEYFRAMES.initial);
-    
+
     // Reset texture index tracking and apply initial texture
     lastTextureIndex = 0;
-    if (model && cameraState.texture) {
-        applyTextureToMaterials(model, cameraState.texture);
-        currentTextureName = cameraState.texture;
-    }
 
     // Single timeline with total duration of 1 (representing 0-100% scroll)
     const cameraTl = gsap.timeline({
@@ -597,6 +805,15 @@ function initCameraAnimations() {
 }
 
 function initMessageAnimations() {
+    // Set initial state for all messages - ensure they start invisible
+    // Restore visibility so GSAP can control it
+    const messages = ['#message-1 .hero-message', '#message-2 .hero-message', '#message-3 .hero-message', '#message-4 .hero-message'];
+    gsap.set(messages, {
+        opacity: 0,
+        y: 100,
+        visibility: 'visible' // Restore visibility so GSAP can animate opacity
+    });
+
     // Header - fades out when you start scrolling
     gsap.fromTo('#hero-header',
         { y: 0, opacity: 1 },
@@ -629,37 +846,56 @@ function initMessageAnimations() {
         }
     );
 
-    // Message 1 - Fade in
+    // Message 1 - Fade in, stay and fade out
     gsap.fromTo('#message-1 .hero-message',
-        { y: 100, opacity: 0 },
+        { y: 0, opacity: 0 },
         {
             y: 0,
             opacity: 1,
             ease: 'none',
             scrollTrigger: {
                 trigger: '#message-1',
-                start: 'top 80%',    // Start when container top is 80% down viewport
-                end: 'top 40%',      // End when container top is 40% down viewport
-                scrub: true
+                start: 'top bottom',    // Start when container top is 80% down viewport
+                end: 'bottom top',      // End when container top is 40% down viewport
+                scrub: true,
+                pin: true,
+                pinnedContainer: '#message-1',
+                pinSpacing: 400
             }
         }
     );
 
-    // Message 1 - Fade out
-    gsap.fromTo('#message-1 .hero-message',
-        { y: 0, opacity: 1 },
-        {
-            y: -50,
-            opacity: 0,
-            ease: 'none',
-            scrollTrigger: {
-                trigger: '#message-1',
-                start: 'bottom 60%',     // Start when container bottom is 60% down viewport
-                end: 'bottom 20%',       // End when container bottom is 20% down viewport
-                scrub: true
-            }
-        }
-    );
+    // gsap.fromTo('#message-1 .hero-message',
+    //     { y: 0, opacity: 1 },
+    //     {
+    //         y:80,
+    //         opacity: 1,
+    //         ease: 'none',
+    //         immediateRender: false, // Don't apply FROM state until trigger is reached
+    //         scrollTrigger: {
+    //             trigger: '#message-1',
+    //             start: 'bottom 10%',     // Start when container top is 40% down viewport
+    //             end: 'bottom 30%',       // End when container bottom is 20% down viewport
+    //             scrub: true
+    //         }
+    //     }
+    // );
+
+    // gsap.fromTo('#message-1 .hero-message',
+    //     { y: 80, opacity: 1 },
+    //     {
+    //         y: 800,
+    //         opacity: 0,
+    //         ease: 'none',
+    //         immediateRender: false, // Don't apply FROM state until trigger is reached
+    //         scrollTrigger: {
+    //             trigger: '#message-1',
+    //             start: 'bottom 40%',     // Start when container bottom is 60% down viewport
+    //             end: 'bottom top',       // End when container bottom is 20% down viewport
+    //             scrub: true
+    //         }
+    //     }
+    // );
 
     // Message 2 - Fade in
     gsap.fromTo('#message-2 .hero-message',
@@ -684,6 +920,7 @@ function initMessageAnimations() {
             y: -50,
             opacity: 0,
             ease: 'none',
+            immediateRender: false, // Don't apply FROM state until trigger is reached
             scrollTrigger: {
                 trigger: '#message-2',
                 start: 'bottom 60%',
@@ -716,6 +953,7 @@ function initMessageAnimations() {
             y: -50,
             opacity: 0,
             ease: 'none',
+            immediateRender: false, // Don't apply FROM state until trigger is reached
             scrollTrigger: {
                 trigger: '#message-3',
                 start: 'bottom 60%',
@@ -736,6 +974,42 @@ function initMessageAnimations() {
                 trigger: '#message-4',
                 start: 'top 80%',
                 end: 'top 40%',
+                scrub: true
+            }
+        }
+    );
+}
+
+function initGradientAnimations() {
+    const tealGradient = document.querySelector('.hero-gradient-teal');
+    if (!tealGradient) return;
+
+    // Fade in teal gradient when entering message 2 area
+    gsap.fromTo(tealGradient,
+        { opacity: 0 },
+        {
+            opacity: 1,
+            ease: 'none',
+            scrollTrigger: {
+                trigger: '#message-2',
+                start: 'top 90%',
+                end: 'top 50%',
+                scrub: true
+            }
+        }
+    );
+
+    // Fade out teal gradient when entering message 4 area (back to purple)
+    gsap.fromTo(tealGradient,
+        { opacity: 1 },
+        {
+            opacity: 0,
+            ease: 'none',
+            immediateRender: false, // Don't apply FROM state until trigger is reached
+            scrollTrigger: {
+                trigger: '#message-4',
+                start: 'top 90%',
+                end: 'top 50%',
                 scrub: true
             }
         }
@@ -836,18 +1110,18 @@ function initScaleAnimations() {
 }
 
 function initLogoScroll() {
-    gsap.fromTo('#logo-scroll-container', 
-        { x:0 },
+    gsap.fromTo('#logo-scroll-container',
+        { x: 0 },
         {
-        x:-500,
-        ease: 'none',
-        scrollTrigger: {
-            trigger: '#logo-scroll-container',
-            start: 'top bottom',
-            end: 'bottom top',
-            scrub: true
-        }
-    });
+            x: -500,
+            ease: 'none',
+            scrollTrigger: {
+                trigger: '#logo-scroll-container',
+                start: 'top bottom',
+                end: 'bottom top',
+                scrub: true
+            }
+        });
 }
 
 function initStickyImageSection() {
@@ -938,6 +1212,7 @@ function init() {
     requestAnimationFrame(() => {
         initCameraAnimations();
         initMessageAnimations();
+        initGradientAnimations();
         initScaleAnimations();
         initHeroFreezing();
         initLogoScroll();
