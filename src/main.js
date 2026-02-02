@@ -438,278 +438,193 @@ function updateCameraFromState() {
 // The helper function selects the smallest breakpoint >= current viewport width
 // ============================================================================
 
-const CAMERA_KEYFRAMES_BY_BREAKPOINT = {
-    // Mobile: max-width 768px
-    // Push camera back (higher zoom values) to fit model in smaller viewport
+// ============================================================================
+// UNIFIED HERO CONFIGURATION
+// Single source of truth for all hero section animations
+// ============================================================================
 
-    768: {
-        initial: {
-            rotation: Math.PI / 2,
-            zoom: 15,
-            elevation: 4,
-            lookAtX: 0,
-            lookAtY: 3,
-            texture: 'texture-1.jpg'
+const HERO_CONFIG = {
+    // =========================================================================
+    // TEXTURES - Single source of truth for texture files
+    // =========================================================================
+    textures: {
+        initial:  'texture-1.jpg',
+        message1: 'texture-2.jpg',
+        message2: 'texture-3.jpg',
+        message3: 'texture-4.jpg',
+        message4: 'texture-5.jpg'
+    },
+
+    // =========================================================================
+    // TIMELINE - All timing values as scroll progress fractions (0-1)
+    // =========================================================================
+    timeline: {
+        // ---------------------------------------------------------------------
+        // PHASE 0: Initial state fade out (hero content + header)
+        // ---------------------------------------------------------------------
+        heroContent: { 
+            fadeOut: { start: 0.00, end: 0.04, yTo: 50 }
         },
+        heroHeader: { 
+            fadeOut: { start: 0.00, end: 0.06, yTo: -50 }
+        },
+
+        // ---------------------------------------------------------------------
+        // PHASE 1: Message 1 (purple gradient)
+        // Camera: initial → message1 position
+        // ---------------------------------------------------------------------
         message1: {
-            rotation: Math.PI / 2,
-            zoom: 14,
-            elevation: 6.5,
-            lookAtX: 0,
-            lookAtY: 3.5,
-            texture: 'texture-2.jpg'
+            camera:  { start: 0.00, end: 0.12 },
+            texture: { start: 0.04 },
+            fadeIn:  { start: 0.00, end: 0.10, yFrom: -50, yTo: 50 },
+            fadeOut: { start: 0.16, end: 0.22, yTo: 100 }
         },
+
+        // ---------------------------------------------------------------------
+        // PHASE 2: Message 2 (teal gradient fades in)
+        // Camera: message1 → message2 position
+        // ---------------------------------------------------------------------
         message2: {
-            rotation: Math.PI / 2,
-            zoom: 13,
-            elevation: 7,
-            lookAtX: 0,
-            lookAtY: 2.5,
-            texture: 'texture-3.jpg'
+            camera:   { start: 0.16, end: 0.30 },
+            texture:  { start: 0.20 },
+            gradient: { start: 0.20, end: 0.28 },
+            fadeIn:   { start: 0.0, end: 0.10, yFrom: -50, yTo: 50 },
+            fadeOut:  { start: 0.70, end: 0.75, yTo: 100 }
         },
+
+        // ---------------------------------------------------------------------
+        // PHASE 3: Message 3 (teal gradient stays)
+        // Camera: message2 → message3 position
+        // ---------------------------------------------------------------------
         message3: {
-            rotation: Math.PI / 2,
-            zoom: 12,
-            elevation: 4,
-            lookAtX: 0,
-            lookAtY: 2.5,
-            texture: 'texture-4.jpg'
+            camera:  { start: 0.34, end: 0.46 },
+            texture: { start: 0.50 },
+            fadeIn:  { start: 0.44, end: 0.50, yFrom: 0, yTo: 0 },
+            fadeOut: { start: 0.62, end: 0.68, yTo: -30 }
         },
+
+        // ---------------------------------------------------------------------
+        // PHASE 4: Message 4 (purple gradient fades back)
+        // Camera: message3 → message4 position
+        // ---------------------------------------------------------------------
         message4: {
-            rotation: Math.PI / 2,
-            zoom: 11,
-            elevation: 4,
-            lookAtX: 0,
-            lookAtY: 3,
-            texture: 'texture-5.jpg'
+            camera:   { start: 0.50, end: 0.62 },
+            texture:  { start: 0.68 },
+            gradient: { start: 0.65, end: 0.73 },
+            fadeIn:   { start: 0.68, end: 0.74, yFrom: 0, yTo: 0 }
+            // No fadeOut - message 4 stays visible
         }
     },
 
-    960: {
-        initial: {
-            rotation: Math.PI / 2,
-            zoom: 10,
-            elevation: 4,
-            lookAtX: 0,
-            lookAtY: 3,
-            texture: 'texture-1.jpg'
+    // =========================================================================
+    // CAMERA - Keyframes per viewport breakpoint (max-width in pixels)
+    // Breakpoints: 768 (mobile), 960 (tablet), 1080, 1280, 9999 (desktop)
+    // =========================================================================
+    camera: {
+        // Mobile: max-width 768px
+        768: {
+            initial:  { rotation: Math.PI / 2, zoom: 15, elevation: 4, lookAtX: 0, lookAtY: 3 },
+            message1: { rotation: Math.PI / 2, zoom: 14, elevation: 6.5, lookAtX: 0, lookAtY: 3.5 },
+            message2: { rotation: Math.PI / 2, zoom: 13, elevation: 7, lookAtX: 0, lookAtY: 2.5 },
+            message3: { rotation: Math.PI / 2, zoom: 12, elevation: 4, lookAtX: 0, lookAtY: 2.5 },
+            message4: { rotation: Math.PI / 2, zoom: 11, elevation: 4, lookAtX: 0, lookAtY: 3 }
         },
-        message1: {
-            rotation: Math.PI / 2,
-            zoom: 14,
-            elevation: 6.5,
-            lookAtX: 0,
-            lookAtY: 3.5,
-            texture: 'texture-2.jpg'
-        },
-        message2: {
-            rotation: Math.PI / 2,
-            zoom: 13,
-            elevation: 7,
-            lookAtX: 0,
-            lookAtY: 2.5,
-            texture: 'texture-3.jpg'
-        },
-        message3: {
-            rotation: Math.PI / 2,
-            zoom: 12,
-            elevation: 4,
-            lookAtX: 0,
-            lookAtY: 2.5,
-            texture: 'texture-4.jpg'
-        },
-        message4: {
-            rotation: Math.PI / 2,
-            zoom: 11,
-            elevation: 4,
-            lookAtX: 0,
-            lookAtY: 3,
-            texture: 'texture-5.jpg'
-        }
-    },
 
-    1080: {
-        initial: {
-            rotation: Math.PI / 2,
-            zoom: 8,
-            elevation: 4,
-            lookAtX: 0,
-            lookAtY: 3,
-            texture: 'texture-1.jpg'
+        // Tablet: max-width 960px
+        960: {
+            initial:  { rotation: Math.PI / 2, zoom: 10, elevation: 4, lookAtX: 0, lookAtY: 3 },
+            message1: { rotation: Math.PI / 2, zoom: 14, elevation: 6.5, lookAtX: 0, lookAtY: 3.5 },
+            message2: { rotation: Math.PI / 2, zoom: 13, elevation: 7, lookAtX: 0, lookAtY: 2.5 },
+            message3: { rotation: Math.PI / 2, zoom: 12, elevation: 4, lookAtX: 0, lookAtY: 2.5 },
+            message4: { rotation: Math.PI / 2, zoom: 11, elevation: 4, lookAtX: 0, lookAtY: 3 }
         },
-        message1: {
-            rotation: Math.PI / 2 - 0.4,
-            zoom: 10,
-            elevation: 2.5,
-            lookAtX: -2,
-            lookAtY: 0.5,
-            texture: 'texture-2.jpg'
-        },
-        message2: {
-            rotation: Math.PI / 2 + 0.4,
-            zoom: 9,
-            elevation: 2.5,
-            lookAtX: 2,
-            lookAtY: 0.5,
-            texture: 'texture-3.jpg'
-        },
-        message3: {
-            rotation: Math.PI / 2 - 0.4,
-            zoom: 9,
-            elevation: 2.5,
-            lookAtX: -2,
-            lookAtY: 0.5,
-            texture: 'texture-4.jpg'
-        },
-        message4: {
-            rotation: Math.PI / 2 - 0.4,
-            zoom: 12,
-            elevation: 2.5,
-            lookAtX: -3,
-            lookAtY: 0.5,
-            texture: 'texture-5.jpg'
-        }
-    },
 
-    1280: {
-        initial: {
-            rotation: Math.PI / 2,
-            zoom: 7,
-            elevation: 4,
-            lookAtX: 0,
-            lookAtY: 3,
-            texture: 'texture-1.jpg'
+        // Small desktop: max-width 1080px
+        1080: {
+            initial:  { rotation: Math.PI / 2, zoom: 8, elevation: 4, lookAtX: 0, lookAtY: 3 },
+            message1: { rotation: Math.PI / 2 - 0.4, zoom: 10, elevation: 2.5, lookAtX: -2, lookAtY: 0.5 },
+            message2: { rotation: Math.PI / 2 + 0.4, zoom: 9, elevation: 2.5, lookAtX: 2, lookAtY: 0.5 },
+            message3: { rotation: Math.PI / 2 - 0.4, zoom: 9, elevation: 2.5, lookAtX: -2, lookAtY: 0.5 },
+            message4: { rotation: Math.PI / 2 - 0.4, zoom: 12, elevation: 2.5, lookAtX: -3, lookAtY: 0.5 }
         },
-        message1: {
-            rotation: Math.PI / 2 - 0.4,
-            zoom: 9,
-            elevation: 2.5,
-            lookAtX: -2,
-            lookAtY: 0.5,
-            texture: 'texture-2.jpg'
-        },
-        message2: {
-            rotation: Math.PI / 2 + 0.4,
-            zoom: 9,
-            elevation: 2.5,
-            lookAtX: 2,
-            lookAtY: 0.5,
-            texture: 'texture-3.jpg'
-        },
-        message3: {
-            rotation: Math.PI / 2 - 0.4,
-            zoom: 9,
-            elevation: 2.5,
-            lookAtX: -2,
-            lookAtY: 0.5,
-            texture: 'texture-4.jpg'
-        },
-        message4: {
-            rotation: Math.PI / 2 - 0.4,
-            zoom: 12,
-            elevation: 2.5,
-            lookAtX: -3,
-            lookAtY: 0.5,
-            texture: 'texture-5.jpg'
-        }
-    },
 
-    // Desktop: min-width 1280px (values optimized for 1280px+)
-    // Using 9999 as "infinity" breakpoint for desktop/default
-    9999: {
-        initial: {
-            rotation: Math.PI / 2,
-            zoom: 5,
-            elevation: 4,
-            lookAtX: 0,
-            lookAtY: 3,
-            texture: 'texture-1.jpg'
+        // Medium desktop: max-width 1280px
+        1280: {
+            initial:  { rotation: Math.PI / 2, zoom: 7, elevation: 4, lookAtX: 0, lookAtY: 3 },
+            message1: { rotation: Math.PI / 2 - 0.4, zoom: 9, elevation: 2.5, lookAtX: -2, lookAtY: 0.5 },
+            message2: { rotation: Math.PI / 2 + 0.4, zoom: 9, elevation: 2.5, lookAtX: 2, lookAtY: 0.5 },
+            message3: { rotation: Math.PI / 2 - 0.4, zoom: 9, elevation: 2.5, lookAtX: -2, lookAtY: 0.5 },
+            message4: { rotation: Math.PI / 2 - 0.4, zoom: 12, elevation: 2.5, lookAtX: -3, lookAtY: 0.5 }
         },
-        message1: {
-            rotation: Math.PI / 2 - 0.4,
-            zoom: 10,
-            elevation: 2,
-            lookAtX: -1,
-            lookAtY: 0.3,
-            texture: 'texture-2.jpg'
-        },
-        message2: {
-            rotation: Math.PI - 1,
-            zoom: 10,
-            elevation: 2,
-            lookAtX: 1,
-            lookAtY: 0.3,
-            texture: 'texture-3.jpg'
-        },
-        message3: {
-            rotation: Math.PI / 2 - 0.4,
-            zoom: 10,
-            elevation: 2,
-            lookAtX: -1,
-            lookAtY: 0.3,
-            texture: 'texture-4.jpg'
-        },
-        message4: {
-            rotation: 1.256,
-            zoom: 12,
-            elevation: 2.5,
-            lookAtX: -2.2,
-            lookAtY: 0.66,
-            texture: 'texture-5.jpg'
+
+        // Large desktop: > 1280px (9999 = infinity)
+        9999: {
+            initial:  { rotation: Math.PI / 2, zoom: 5, elevation: 4, lookAtX: 0, lookAtY: 3 },
+            message1: { rotation: Math.PI / 2 - 0.4, zoom: 10, elevation: 2, lookAtX: -1, lookAtY: 0.3 },
+            message2: { rotation: Math.PI - 1, zoom: 10, elevation: 2, lookAtX: 1, lookAtY: 0.3 },
+            message3: { rotation: Math.PI / 2 - 0.4, zoom: 10, elevation: 2, lookAtX: -1, lookAtY: 0.3 },
+            message4: { rotation: 1.256, zoom: 12, elevation: 2.5, lookAtX: -2.2, lookAtY: 0.66 }
         }
     }
 };
 
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
 /**
- * Get the appropriate keyframes for the current viewport width.
+ * Get the appropriate camera keyframes for the current viewport width.
  * Finds the smallest breakpoint that is >= current width.
  */
 function getKeyframesForViewport() {
     const width = window.innerWidth;
-    const breakpoints = Object.keys(CAMERA_KEYFRAMES_BY_BREAKPOINT)
+    const breakpoints = Object.keys(HERO_CONFIG.camera)
         .map(Number)
         .sort((a, b) => a - b);
 
     for (const bp of breakpoints) {
         if (width <= bp) {
-            return CAMERA_KEYFRAMES_BY_BREAKPOINT[bp];
+            return HERO_CONFIG.camera[bp];
         }
     }
     // Fallback to largest breakpoint
-    return CAMERA_KEYFRAMES_BY_BREAKPOINT[breakpoints[breakpoints.length - 1]];
+    return HERO_CONFIG.camera[breakpoints[breakpoints.length - 1]];
 }
 
 // Current active keyframes (updated on init and resize)
 let CAMERA_KEYFRAMES = getKeyframesForViewport();
 
-// ============================================================================
-// GSAP SCROLL ANIMATIONS
-// Single timeline for camera with explicit durations for smooth bidirectional scrubbing
-// ============================================================================
-
-// Texture thresholds - texture changes at these scroll progress points
-const TEXTURE_THRESHOLDS = [
-    { progress: 0, texture: 'texture-1.jpg' },
-    { progress: 0.08, texture: 'texture-2.jpg' },
-    { progress: 0.32, texture: 'texture-3.jpg' },
-    { progress: 0.5, texture: 'texture-4.jpg' },
-    { progress: 0.75, texture: 'texture-5.jpg' }
-];
+/**
+ * Derive texture thresholds from HERO_CONFIG for runtime use
+ */
+function getTextureThresholds() {
+    const TL = HERO_CONFIG.timeline;
+    const TX = HERO_CONFIG.textures;
+    return [
+        { progress: 0, texture: TX.initial },
+        { progress: TL.message1.texture.start, texture: TX.message1 },
+        { progress: TL.message2.texture.start, texture: TX.message2 },
+        { progress: TL.message3.texture.start, texture: TX.message3 },
+        { progress: TL.message4.texture.start, texture: TX.message4 }
+    ];
+}
 
 let lastTextureIndex = 0;
 
 function updateTextureFromProgress(progress) {
+    const thresholds = getTextureThresholds();
+    
     // Find which texture should be active based on progress
     let textureIndex = 0;
-    for (let i = TEXTURE_THRESHOLDS.length - 1; i >= 0; i--) {
-        if (progress >= TEXTURE_THRESHOLDS[i].progress) {
+    for (let i = thresholds.length - 1; i >= 0; i--) {
+        if (progress >= thresholds[i].progress) {
             textureIndex = i;
             break;
         }
     }
 
     // Always update texture state based on current progress (ensures bidirectional scrolling works)
-    const targetTexture = TEXTURE_THRESHOLDS[textureIndex].texture;
+    const targetTexture = thresholds[textureIndex].texture;
     if (cameraState.texture !== targetTexture) {
         cameraState.texture = targetTexture;
         lastTextureIndex = textureIndex;
@@ -721,26 +636,40 @@ function updateTextureFromProgress(progress) {
     }
 }
 
-function initCameraAnimations() {
+// ============================================================================
+// UNIFIED HERO TIMELINE
+// Single timeline controlling camera, messages, and gradients
+// ============================================================================
+
+function initHeroTimeline() {
     const heroSection = document.querySelector('.hero-section');
+    const tealGradient = document.querySelector('.hero-gradient-teal');
     if (!heroSection) return;
 
-    // Get keyframes for current viewport width
-    CAMERA_KEYFRAMES = getKeyframesForViewport();
+    const TL = HERO_CONFIG.timeline;
+    const CAM = CAMERA_KEYFRAMES;
 
-    // Set initial camera state explicitly
-    Object.assign(cameraState, CAMERA_KEYFRAMES.initial);
-
-    // Reset texture index tracking and apply initial texture
+    // Set initial states
+    Object.assign(cameraState, CAM.initial);
     lastTextureIndex = 0;
 
-    // Single timeline with total duration of 1 (representing 0-100% scroll)
-    const cameraTl = gsap.timeline({
+    gsap.set(['#message-1 .hero-message', '#message-2 .hero-message', '#message-3 .hero-message', '#message-4 .hero-message'], {
+        opacity: 0,
+        y: TL.message1.fadeIn.yFrom,
+        visibility: 'visible'
+    });
+
+    if (tealGradient) {
+        gsap.set(tealGradient, { opacity: 0 });
+    }
+
+    // Create the unified timeline
+    const tl = gsap.timeline({
         scrollTrigger: {
             trigger: heroSection,
             start: 'top top',
             end: 'bottom bottom',
-            scrub: 0.5, // Faster scrub response for smoother feel
+            scrub: 0.5,
             onUpdate: (self) => {
                 updateTextureFromProgress(self.progress);
                 updateCameraFromState();
@@ -748,272 +677,168 @@ function initCameraAnimations() {
         }
     });
 
-    // Timeline positions (as fraction of total timeline)
-    // 0.00 → 0.15: Initial → Message 1
-    // 0.15 → 0.40: Message 1 → Message 2  
-    // 0.40 → 0.65: Message 2 → Message 3
-    // 0.65 → 0.85: Message 3 → Message 4
-    // 0.85 → 1.00: Hold at Message 4
-
-    // Initial → Message 1 (duration: 0.15)
-    cameraTl.to(cameraState, {
-        duration: 0.15,
-        rotation: CAMERA_KEYFRAMES.message1.rotation,
-        zoom: CAMERA_KEYFRAMES.message1.zoom,
-        elevation: CAMERA_KEYFRAMES.message1.elevation,
-        lookAtX: CAMERA_KEYFRAMES.message1.lookAtX,
-        lookAtY: CAMERA_KEYFRAMES.message1.lookAtY,
-        ease: 'none'
-    });
-
-    // Message 1 → Message 2 (duration: 0.25, from 0.15 to 0.40)
-    cameraTl.to(cameraState, {
-        duration: 0.25,
-        rotation: CAMERA_KEYFRAMES.message2.rotation,
-        zoom: CAMERA_KEYFRAMES.message2.zoom,
-        elevation: CAMERA_KEYFRAMES.message2.elevation,
-        lookAtX: CAMERA_KEYFRAMES.message2.lookAtX,
-        lookAtY: CAMERA_KEYFRAMES.message2.lookAtY,
-        ease: 'none'
-    });
-
-    // Message 2 → Message 3 (duration: 0.25, from 0.40 to 0.65)
-    cameraTl.to(cameraState, {
-        duration: 0.25,
-        rotation: CAMERA_KEYFRAMES.message3.rotation,
-        zoom: CAMERA_KEYFRAMES.message3.zoom,
-        elevation: CAMERA_KEYFRAMES.message3.elevation,
-        lookAtX: CAMERA_KEYFRAMES.message3.lookAtX,
-        lookAtY: CAMERA_KEYFRAMES.message3.lookAtY,
-        ease: 'none'
-    });
-
-    // Message 3 → Message 4 (duration: 0.20, from 0.65 to 0.85)
-    cameraTl.to(cameraState, {
-        duration: 0.20,
-        rotation: CAMERA_KEYFRAMES.message4.rotation,
-        zoom: CAMERA_KEYFRAMES.message4.zoom,
-        elevation: CAMERA_KEYFRAMES.message4.elevation,
-        lookAtX: CAMERA_KEYFRAMES.message4.lookAtX,
-        lookAtY: CAMERA_KEYFRAMES.message4.lookAtY,
-        ease: 'none'
-    });
-
-    // Hold at Message 4 (duration: 0.15, from 0.85 to 1.00)
-    // Empty tween to fill the timeline
-    cameraTl.to({}, { duration: 0.15 });
-}
-
-function initMessageAnimations() {
-    // Set initial state for all messages - ensure they start invisible
-    // Restore visibility so GSAP can control it
-    const messages = ['#message-1 .hero-message', '#message-2 .hero-message', '#message-3 .hero-message', '#message-4 .hero-message'];
-    gsap.set(messages, {
-        opacity: 0,
-        y: 100,
-        visibility: 'visible' // Restore visibility so GSAP can animate opacity
-    });
-
-    // Header - fades out when you start scrolling
-    gsap.fromTo('#hero-header',
-        { y: 0, opacity: 1 },
-        {
-            y: -100,
-            opacity: 0,
-            ease: 'none',
-            scrollTrigger: {
-                trigger: '.hero-section',
-                start: 'top top',        // When hero section top hits viewport top
-                end: '10% top',          // When 10% of hero section passes viewport top
-                scrub: true
-            }
-        }
+    // =========================================================================
+    // PHASE 0: Hero content and header fade out
+    // =========================================================================
+    
+    tl.fromTo('#hero-content > div',
+        { opacity: 1, y: 0 },
+        { 
+            opacity: 0, 
+            y: TL.heroContent.fadeOut.yTo, 
+            ease: 'none', 
+            duration: TL.heroContent.fadeOut.end - TL.heroContent.fadeOut.start 
+        },
+        TL.heroContent.fadeOut.start
     );
 
-    // Hero content - fades out quickly
-    gsap.fromTo('#hero-content > div',
-        { y: 0, opacity: 1 },
-        {
-            y: 100,
-            opacity: 0,
-            ease: 'none',
-            scrollTrigger: {
-                trigger: '.hero-section',
-                start: 'top top',
-                end: '5% top',
-                scrub: true
-            }
-        }
+    tl.fromTo('#hero-header',
+        { opacity: 1, y: 0 },
+        { 
+            opacity: 0, 
+            y: TL.heroHeader.fadeOut.yTo, 
+            ease: 'none', 
+            duration: TL.heroHeader.fadeOut.end - TL.heroHeader.fadeOut.start 
+        },
+        TL.heroHeader.fadeOut.start
     );
 
-    // Message 1 - Fade in, stay and fade out
-    gsap.fromTo('#message-1 .hero-message',
-        { y: 0, opacity: 0 },
-        {
-            y: 0,
-            opacity: 1,
+    // =========================================================================
+    // PHASE 1: Message 1
+    // =========================================================================
+    
+    // Camera moves to message 1 position
+    tl.to(cameraState, {
+        rotation: CAM.message1.rotation,
+        zoom: CAM.message1.zoom,
+        elevation: CAM.message1.elevation,
+        lookAtX: CAM.message1.lookAtX,
+        lookAtY: CAM.message1.lookAtY,
+        ease: 'none',
+        duration: TL.message1.camera.end - TL.message1.camera.start
+    }, TL.message1.camera.start);
+
+    // Message 1 fades in
+    tl.to('#message-1 .hero-message', {
+        opacity: 1, 
+        y: TL.message1.fadeIn.yTo, 
+        ease: 'none',
+        duration: TL.message1.fadeIn.end - TL.message1.fadeIn.start
+    }, TL.message1.fadeIn.start);
+
+    // Message 1 fades out
+    tl.to('#message-1 .hero-message', {
+        opacity: 0, 
+        y: TL.message1.fadeOut.yTo, 
+        ease: 'none',
+        duration: TL.message1.fadeOut.end - TL.message1.fadeOut.start
+    }, TL.message1.fadeOut.start);
+
+    // =========================================================================
+    // PHASE 2: Message 2 + Teal gradient
+    // =========================================================================
+    
+    // Camera moves to message 2 position
+    tl.to(cameraState, {
+        rotation: CAM.message2.rotation,
+        zoom: CAM.message2.zoom,
+        elevation: CAM.message2.elevation,
+        lookAtX: CAM.message2.lookAtX,
+        lookAtY: CAM.message2.lookAtY,
+        ease: 'none',
+        duration: TL.message2.camera.end - TL.message2.camera.start
+    }, TL.message2.camera.start);
+
+    // Teal gradient fades in
+    if (tealGradient) {
+        tl.to(tealGradient, {
+            opacity: 1, 
             ease: 'none',
-            scrollTrigger: {
-                trigger: '#message-1',
-                start: 'top bottom',    // Start when container top is 80% down viewport
-                end: 'bottom top',      // End when container top is 40% down viewport
-                scrub: true,
-                pin: true,
-                pinnedContainer: '#message-1',
-                pinSpacing: 400
-            }
-        }
-    );
+            duration: TL.message2.gradient.end - TL.message2.gradient.start
+        }, TL.message2.gradient.start);
+    }
 
-    // gsap.fromTo('#message-1 .hero-message',
-    //     { y: 0, opacity: 1 },
-    //     {
-    //         y:80,
-    //         opacity: 1,
-    //         ease: 'none',
-    //         immediateRender: false, // Don't apply FROM state until trigger is reached
-    //         scrollTrigger: {
-    //             trigger: '#message-1',
-    //             start: 'bottom 10%',     // Start when container top is 40% down viewport
-    //             end: 'bottom 30%',       // End when container bottom is 20% down viewport
-    //             scrub: true
-    //         }
-    //     }
-    // );
+    // Message 2 fades in
+    tl.to('#message-2 .hero-message', {
+        opacity: 1, 
+        y: TL.message2.fadeIn.yTo, 
+        ease: 'none',
+        duration: TL.message2.fadeIn.end - TL.message2.fadeIn.start
+    }, TL.message2.fadeIn.start);
 
-    // gsap.fromTo('#message-1 .hero-message',
-    //     { y: 80, opacity: 1 },
-    //     {
-    //         y: 800,
-    //         opacity: 0,
-    //         ease: 'none',
-    //         immediateRender: false, // Don't apply FROM state until trigger is reached
-    //         scrollTrigger: {
-    //             trigger: '#message-1',
-    //             start: 'bottom 40%',     // Start when container bottom is 60% down viewport
-    //             end: 'bottom top',       // End when container bottom is 20% down viewport
-    //             scrub: true
-    //         }
-    //     }
-    // );
+    // Message 2 fades out
+    tl.to('#message-2 .hero-message', {
+        opacity: 0, 
+        y: TL.message2.fadeOut.yTo, 
+        ease: 'none',
+        duration: TL.message2.fadeOut.end - TL.message2.fadeOut.start
+    }, TL.message2.fadeOut.start);
 
-    // Message 2 - Fade in
-    gsap.fromTo('#message-2 .hero-message',
-        { y: 100, opacity: 0 },
-        {
-            y: 0,
-            opacity: 1,
+    // =========================================================================
+    // PHASE 3: Message 3
+    // =========================================================================
+    
+    // Camera moves to message 3 position
+    tl.to(cameraState, {
+        rotation: CAM.message3.rotation,
+        zoom: CAM.message3.zoom,
+        elevation: CAM.message3.elevation,
+        lookAtX: CAM.message3.lookAtX,
+        lookAtY: CAM.message3.lookAtY,
+        ease: 'none',
+        duration: TL.message3.camera.end - TL.message3.camera.start
+    }, TL.message3.camera.start);
+
+    // Message 3 fades in
+    tl.to('#message-3 .hero-message', {
+        opacity: 1, 
+        y: TL.message3.fadeIn.yTo, 
+        ease: 'none',
+        duration: TL.message3.fadeIn.end - TL.message3.fadeIn.start
+    }, TL.message3.fadeIn.start);
+
+    // Message 3 fades out
+    tl.to('#message-3 .hero-message', {
+        opacity: 0, 
+        y: TL.message3.fadeOut.yTo, 
+        ease: 'none',
+        duration: TL.message3.fadeOut.end - TL.message3.fadeOut.start
+    }, TL.message3.fadeOut.start);
+
+    // =========================================================================
+    // PHASE 4: Message 4 + Purple gradient returns
+    // =========================================================================
+    
+    // Camera moves to message 4 position
+    tl.to(cameraState, {
+        rotation: CAM.message4.rotation,
+        zoom: CAM.message4.zoom,
+        elevation: CAM.message4.elevation,
+        lookAtX: CAM.message4.lookAtX,
+        lookAtY: CAM.message4.lookAtY,
+        ease: 'none',
+        duration: TL.message4.camera.end - TL.message4.camera.start
+    }, TL.message4.camera.start);
+
+    // Teal gradient fades out (purple returns)
+    if (tealGradient) {
+        tl.to(tealGradient, {
+            opacity: 0, 
             ease: 'none',
-            scrollTrigger: {
-                trigger: '#message-2',
-                start: 'top 80%',
-                end: 'top 40%',
-                scrub: true
-            }
-        }
-    );
+            duration: TL.message4.gradient.end - TL.message4.gradient.start
+        }, TL.message4.gradient.start);
+    }
 
-    // Message 2 - Fade out
-    gsap.fromTo('#message-2 .hero-message',
-        { y: 0, opacity: 1 },
-        {
-            y: -50,
-            opacity: 0,
-            ease: 'none',
-            immediateRender: false, // Don't apply FROM state until trigger is reached
-            scrollTrigger: {
-                trigger: '#message-2',
-                start: 'bottom 60%',
-                end: 'bottom 20%',
-                scrub: true
-            }
-        }
-    );
+    // Message 4 fades in (stays visible - no fade out)
+    tl.to('#message-4 .hero-message', {
+        opacity: 1, 
+        y: TL.message4.fadeIn.yTo, 
+        ease: 'none',
+        duration: TL.message4.fadeIn.end - TL.message4.fadeIn.start
+    }, TL.message4.fadeIn.start);
 
-    // Message 3 - Fade in
-    gsap.fromTo('#message-3 .hero-message',
-        { y: 100, opacity: 0 },
-        {
-            y: 0,
-            opacity: 1,
-            ease: 'none',
-            scrollTrigger: {
-                trigger: '#message-3',
-                start: 'top 80%',
-                end: 'top 40%',
-                scrub: true
-            }
-        }
-    );
-
-    // Message 3 - Fade out
-    gsap.fromTo('#message-3 .hero-message',
-        { y: 0, opacity: 1 },
-        {
-            y: -50,
-            opacity: 0,
-            ease: 'none',
-            immediateRender: false, // Don't apply FROM state until trigger is reached
-            scrollTrigger: {
-                trigger: '#message-3',
-                start: 'bottom 60%',
-                end: 'bottom 20%',
-                scrub: true
-            }
-        }
-    );
-
-    // Message 4 - Fade in (no fade out, it's the last one)
-    gsap.fromTo('#message-4 .hero-message',
-        { y: 100, opacity: 0 },
-        {
-            y: 0,
-            opacity: 1,
-            ease: 'none',
-            scrollTrigger: {
-                trigger: '#message-4',
-                start: 'top 80%',
-                end: 'top 40%',
-                scrub: true
-            }
-        }
-    );
-}
-
-function initGradientAnimations() {
-    const tealGradient = document.querySelector('.hero-gradient-teal');
-    if (!tealGradient) return;
-
-    // Fade in teal gradient when entering message 2 area
-    gsap.fromTo(tealGradient,
-        { opacity: 0 },
-        {
-            opacity: 1,
-            ease: 'none',
-            scrollTrigger: {
-                trigger: '#message-2',
-                start: 'top 90%',
-                end: 'top 50%',
-                scrub: true
-            }
-        }
-    );
-
-    // Fade out teal gradient when entering message 4 area (back to purple)
-    gsap.fromTo(tealGradient,
-        { opacity: 1 },
-        {
-            opacity: 0,
-            ease: 'none',
-            immediateRender: false, // Don't apply FROM state until trigger is reached
-            scrollTrigger: {
-                trigger: '#message-4',
-                start: 'top 90%',
-                end: 'top 50%',
-                scrub: true
-            }
-        }
-    );
+    // Fill remaining timeline to reach 1.0
+    tl.to({}, { duration: 1 - TL.message4.fadeIn.end }, TL.message4.fadeIn.end);
 }
 
 function initHeroFreezing() {
@@ -1210,9 +1035,7 @@ function init() {
 
     // Small delay to ensure DOM has fully reflowed after scroll reset
     requestAnimationFrame(() => {
-        initCameraAnimations();
-        initMessageAnimations();
-        initGradientAnimations();
+        initHeroTimeline();  // Unified timeline for camera, messages, and gradients
         initScaleAnimations();
         initHeroFreezing();
         initLogoScroll();
@@ -1243,7 +1066,7 @@ let lastBreakpoint = null;
  */
 function getCurrentBreakpoint() {
     const width = window.innerWidth;
-    const breakpoints = Object.keys(CAMERA_KEYFRAMES_BY_BREAKPOINT)
+    const breakpoints = Object.keys(HERO_CONFIG.camera)
         .map(Number)
         .sort((a, b) => a - b);
 
@@ -1274,8 +1097,8 @@ function onWindowResize() {
         lastBreakpoint = currentBreakpoint;
 
         if (breakpointChanged) {
-            // Breakpoint changed - reinitialize camera animations with new keyframes
-            // Kill existing camera ScrollTrigger to prevent duplicates
+            // Breakpoint changed - reinitialize hero timeline with new keyframes
+            // Kill existing hero section ScrollTrigger to prevent duplicates
             ScrollTrigger.getAll().forEach(st => {
                 if (st.vars.trigger === document.querySelector('.hero-section')) {
                     st.kill();
@@ -1283,7 +1106,7 @@ function onWindowResize() {
             });
 
             // Reinitialize with new keyframes
-            initCameraAnimations();
+            initHeroTimeline();
         }
 
         // Force complete ScrollTrigger recalculation
