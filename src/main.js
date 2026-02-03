@@ -652,18 +652,22 @@ function initMessage2() {
         }
     );
 
-    // Gradient: Teal fades in
+    // Gradient: Teal fades in (use fromTo with immediateRender: false for proper bi-directional scrubbing)
     if (gradient) {
-        gsap.to(gradient, {
-            opacity: 1,
-            ease: 'none',
-            scrollTrigger: {
-                trigger,
-                start: 'top 70%',
-                end: 'top 30%',
-                scrub: true
+        gsap.fromTo(gradient,
+            { opacity: 0 },
+            {
+                opacity: 1,
+                ease: 'none',
+                immediateRender: false,
+                scrollTrigger: {
+                    trigger,
+                    start: 'top 70%',
+                    end: 'top 30%',
+                    scrub: true
+                }
             }
-        });
+        );
     }
 
     // Message fade in
@@ -805,18 +809,22 @@ function initMessage4() {
         }
     );
 
-    // Gradient: Teal fades out (back to purple)
+    // Gradient: Teal fades out (back to purple) - use fromTo with immediateRender: false for proper bi-directional scrubbing
     if (gradient) {
-        gsap.to(gradient, {
-            opacity: 0,
-            ease: 'none',
-            scrollTrigger: {
-                trigger,
-                start: 'top 70%',
-                end: 'top 30%',
-                scrub: true
+        gsap.fromTo(gradient,
+            { opacity: 1 },
+            {
+                opacity: 0,
+                ease: 'none',
+                immediateRender: false,
+                scrollTrigger: {
+                    trigger,
+                    start: 'top 70%',
+                    end: 'top 30%',
+                    scrub: true
+                }
             }
-        });
+        );
     }
 
     // Message fade in (stays visible - no fade out)
