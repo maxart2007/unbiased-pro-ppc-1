@@ -8,6 +8,9 @@ import './style.css';
 // Register GSAP plugins
 gsap.registerPlugin(ScrollTrigger);
 
+// Base path for assets (handles GitHub Pages subdirectory)
+const basePath = import.meta.env.BASE_URL;
+
 // ============================================================================
 // IMMEDIATE MESSAGE HIDING - Run before page fully loads
 // ============================================================================
@@ -138,7 +141,7 @@ function createScreenMaterial(texture) {
 
 textureFiles.forEach((filename) => {
     const texture = textureLoader.load(
-        `/laptop.fbm/${filename}`,
+        `${basePath}laptop.fbm/${filename}`,
         (loadedTexture) => {
             loadedTexture.flipY = false;
             loadedTexture.colorSpace = THREE.NoColorSpace;  // Pass colors through exactly as-is
@@ -280,7 +283,6 @@ function transitionToTexture(textureName, duration = 0.4) {
 // Load FBX model
 const loader = new FBXLoader();
 const loadingManager = new THREE.LoadingManager();
-const basePath = import.meta.env.BASE_URL;
 loadingManager.setURLModifier((url) => {
     if (url.includes('.png') || url.includes('.jpg') || url.includes('.jpeg')) {
         return basePath + 'laptop.fbm/' + url.split('/').pop();
