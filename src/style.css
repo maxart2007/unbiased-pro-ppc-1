@@ -5,7 +5,7 @@
 /* Custom font - Galano 900 for headings */
 @font-face {
   font-family: 'Galano';
-  src: url('/fonts/Galano_900.woff2') format('woff2');
+  src: url('../fonts/Galano_900.woff2') format('woff2');
   font-weight: 900;
   font-style: normal;
   font-display: swap;

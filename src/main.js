@@ -280,9 +280,10 @@ function transitionToTexture(textureName, duration = 0.4) {
 // Load FBX model
 const loader = new FBXLoader();
 const loadingManager = new THREE.LoadingManager();
+const basePath = import.meta.env.BASE_URL;
 loadingManager.setURLModifier((url) => {
     if (url.includes('.png') || url.includes('.jpg') || url.includes('.jpeg')) {
-        return '/laptop.fbm/' + url.split('/').pop();
+        return basePath + 'laptop.fbm/' + url.split('/').pop();
     }
     return url;
 });
@@ -293,7 +294,7 @@ const modelGroup = new THREE.Group();
 scene.add(modelGroup);
 
 loader.load(
-    '/laptop.fbx',
+    basePath + 'laptop.fbx',
     (object) => {
         model = object;
 
@@ -982,10 +983,10 @@ function initStickyImageSection() {
             start: 'top center',
             end: 'bottom center',
             onEnter: () => {
-                if (imageSrc) stickyImage.src = imageSrc;
+                if (imageSrc) stickyImage.src = basePath + imageSrc;
             },
             onEnterBack: () => {
-                if (imageSrc) stickyImage.src = imageSrc;
+                if (imageSrc) stickyImage.src = basePath + imageSrc;
             }
         });
     });

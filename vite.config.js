@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 
-export default defineConfig({
-  base: process.env.NODE_ENV === 'production' ? '/unbiased-pro-ppc-1/' : '/',
+export default defineConfig(({ command }) => ({
+  base: command === 'build' ? '/unbiased-pro-ppc-1/' : '/',
   server: {
     port: 3000,
     open: true
@@ -27,4 +27,4 @@ export default defineConfig({
     target: 'es2015',
     cssCodeSplit: true,
   },
-});
+}));
