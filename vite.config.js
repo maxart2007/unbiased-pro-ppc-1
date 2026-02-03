@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/unbiased-pro-ppc-1/',
+  base: process.env.NODE_ENV === 'production' ? '/unbiased-pro-ppc-1/' : '/',
   server: {
     port: 3000,
     open: true
