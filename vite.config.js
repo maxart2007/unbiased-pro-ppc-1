@@ -7,6 +7,23 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    assetsDir: 'assets'
-  }
+    assetsDir: 'assets',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Separate Three.js into its own chunk (largest library ~600KB)
+          'three': ['three'],
+          // Separate GSAP into its own chunk (~100KB)
+          'gsap': ['gsap', 'gsap/ScrollTrigger'],
+          // Separate Lenis into its own chunk (~20KB)
+          'lenis': ['@studio-freight/lenis'],
+        }
+      }
+    },
+    // Increase chunk size warning limit (Three.js is inherently large)
+    chunkSizeWarningLimit: 1000,
+    // Optimize chunk size
+    target: 'es2015',
+    cssCodeSplit: true,
+  },
 });
